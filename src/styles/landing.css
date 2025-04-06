@@ -1,0 +1,104 @@
+.landing-container {
+    min-height: 100vh;
+    background-color: #f8fafc;
+    text-align: center;
+  }
+  
+  /* Navbar */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 5%;
+    background: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+  
+  .logo {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #007bff;
+  }
+  
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+  }
+  
+  .nav-link {
+    color: #333;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  
+  .signup-button {
+    background: #007bff;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    text-decoration: none;
+  }
+  
+  .signup-button:hover {
+    background: #0056b3;
+  }
+  
+  /* Hero Section */
+  .hero {
+    padding: 5rem 10%;
+  }
+  
+  .hero-title {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #222;
+  }
+  
+  .highlight {
+    color: #007bff;
+  }
+  
+  .hero-subtitle {
+    color: #555;
+    font-size: 1.2rem;
+    margin-top: 1rem;
+  }
+  
+  .demo-button {
+    margin-top: 1.5rem;
+    background: #28a745;
+    color: white;
+    padding: 0.75rem 2rem;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  
+  .demo-button:hover {
+    background: #218838;
+  }
+  
+  /* Floating Icons */
+  .floating-icons {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 3rem;
+  }
+  
+  .icon {
+    width: 50px;
+    height: 50px;
+    animation: float 4s infinite ease-in-out;
+  }
+  
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  
