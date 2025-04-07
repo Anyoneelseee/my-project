@@ -4,7 +4,7 @@ import axios from 'axios';
 export async function POST(req: NextRequest) {
   try {
     const { code, language } = await req.json();
-    const response = await axios.post('https://cbab-172-207-80-45.ngrok-free.app/compile', {
+    const response = await axios.post('https://1985-172-207-80-45.ngrok-free.app/compile', {
       code,
       language,
     });
