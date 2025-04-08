@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -11,26 +11,79 @@ import 'ace-builds/src-noconflict/mode-c_cpp';
 import 'ace-builds/src-noconflict/theme-monokai';
 
 const Playground: React.FC = () => {
-  const [code, setCode] = useState('console.log("Hello, World!");');
-  const [language, setLanguage] = useState('javascript');
-  const [input, setInput] = useState(''); // New state for user input
-  const [output, setOutput] = useState('');
-  const [error, setError] = useState('');
+  const [code, setCode] = useState('#include <iostream>\n#include <string>\n\nint main() {\n    std::string name;\n\n    std::cout << "Please enter your name: ";\n    std::getline(std::cin, name);\n\n    std::cout << "Your name is: " << name;\n    return 0;\n}');
+  const [language, setLanguage] = useState('cpp');
+  const [output, setOutput] = useState<string[]>([]); // Store output as an array of lines
+  const [error, setError] = useState<string[]>([]); // Store errors as an array of lines
+  const [isRunning, setIsRunning] = useState(false); // Track if the program is running
+  const [waitingForInput, setWaitingForInput] = useState(false); // Track if the program is waiting for input
+  const wsRef = useRef<WebSocket | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleCompile = async () => {
-    try {
-      const response = await fetch('/api/compile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language, input }), // Include input in the request
-      });
-      const data = await response.json();
-      setOutput(data.output || '');
-      setError(data.error || '');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to compile code';
-      setError(errorMessage);
-      setOutput('');
+  // Initialize WebSocket connection
+  useEffect(() => {
+    const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws') || 'ws://172.207.80.45:3001';
+    wsRef.current = new WebSocket(wsUrl);
+
+    wsRef.current.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    wsRef.current.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'output') {
+        setOutput((prev) => [...prev, msg.data]);
+        setWaitingForInput(true); // Assume the program might be waiting for input after output
+      } else if (msg.type === 'error') {
+        setError((prev) => [...prev, msg.data]);
+        setWaitingForInput(false);
+      } else if (msg.type === 'exit') {
+        setIsRunning(false);
+        setWaitingForInput(false);
+      }
+    };
+
+    wsRef.current.onclose = () => {
+      console.log('WebSocket disconnected');
+      setIsRunning(false);
+      setWaitingForInput(false);
+    };
+
+    return () => {
+      wsRef.current?.close();
+    };
+  }, []);
+
+  const handleCompile = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setError((prev) => [...prev, 'WebSocket connection is not open']);
+      return;
+    }
+
+    setOutput([]);
+    setError([]);
+    setIsRunning(true);
+    setWaitingForInput(false);
+
+    wsRef.current.send(JSON.stringify({
+      type: 'compile',
+      data: { code, language }
+    }));
+  };
+
+  const handleInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!wsRef.current || !inputRef.current) return;
+
+    const userInput = inputRef.current.value;
+    if (userInput) {
+      wsRef.current.send(JSON.stringify({
+        type: 'input',
+        data: userInput
+      }));
+      setOutput((prev) => [...prev, userInput]); // Display the user's input in the output
+      inputRef.current.value = ''; // Clear the input field
+      setWaitingForInput(false); // Wait for the next prompt
     }
   };
 
@@ -47,6 +100,7 @@ const Playground: React.FC = () => {
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               className="p-2 border rounded"
+              disabled={isRunning}
             >
               <option value="javascript">JavaScript</option>
               <option value="python">Python</option>
@@ -69,31 +123,38 @@ const Playground: React.FC = () => {
                 tabSize: 2,
               }}
               style={{ width: '100%', height: '400px' }}
+              readOnly={isRunning}
             />
 
-            <Label>Input (for programs that require user input)</Label>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Enter input here (e.g., for std::cin, input(), etc.)"
-              className="p-2 border rounded w-full h-24"
-            />
+            <Button onClick={handleCompile} disabled={isRunning}>
+              {isRunning ? 'Running...' : 'Compile and Run'}
+            </Button>
 
-            <Button onClick={handleCompile}>Compile and Run</Button>
-
-            {output && (
-              <div>
-                <Label>Output:</Label>
-                <pre className="p-2 bg-gray-800 text-white rounded">{output}</pre>
+            <div>
+              <Label>Output:</Label>
+              <div
+                className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
+                style={{ height: '200px', whiteSpace: 'pre-wrap', position: 'relative' }}
+              >
+                {output.map((line, index) => (
+                  <div key={index}>{line}</div>
+                ))}
+                {error.map((line, index) => (
+                  <div key={`error-${index}`} className="text-red-400">{line}</div>
+                ))}
+                {waitingForInput && isRunning && (
+                  <form onSubmit={handleInputSubmit} className="mt-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      className="p-1 bg-gray-700 text-white border-none outline-none w-full"
+                      placeholder="Type your input here and press Enter..."
+                      autoFocus
+                    />
+                  </form>
+                )}
               </div>
-            )}
-
-            {error && (
-              <div>
-                <Label>Error:</Label>
-                <pre className="p-2 bg-red-800 text-white rounded">{error}</pre>
-              </div>
-            )}
+            </div>
           </div>
         </CardContent>
       </Card>
