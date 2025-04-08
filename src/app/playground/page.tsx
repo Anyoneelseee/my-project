@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Add useCallback import
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,8 @@ const Playground: React.FC = () => {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
-  const connectWebSocket = () => {
+  // Wrap connectWebSocket in useCallback to memoize it
+  const connectWebSocket = useCallback(() => {
     const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws').replace('https', 'wss');
     if (!wsUrl) {
       setError((prev) => [...prev, 'WebSocket URL is not defined']);
@@ -71,7 +72,7 @@ const Playground: React.FC = () => {
       console.error('WebSocket error:', error);
       setError((prev) => [...prev, 'WebSocket connection failed']);
     };
-  };
+  }, [setOutput, setError, setIsRunning, setWaitingForInput]); // Add state setters as dependencies
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -80,7 +81,7 @@ const Playground: React.FC = () => {
     return () => {
       wsRef.current?.close();
     };
-  }, []);
+  }, [connectWebSocket]); // connectWebSocket is now stable
 
   const handleCompile = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
