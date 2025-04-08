@@ -13,6 +13,7 @@ import 'ace-builds/src-noconflict/theme-monokai';
 const Playground: React.FC = () => {
   const [code, setCode] = useState('console.log("Hello, World!");');
   const [language, setLanguage] = useState('javascript');
+  const [input, setInput] = useState(''); // New state for user input
   const [output, setOutput] = useState('');
   const [error, setError] = useState('');
 
@@ -21,7 +22,7 @@ const Playground: React.FC = () => {
       const response = await fetch('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, language }),
+        body: JSON.stringify({ code, language, input }), // Include input in the request
       });
       const data = await response.json();
       setOutput(data.output || '');
@@ -68,6 +69,14 @@ const Playground: React.FC = () => {
                 tabSize: 2,
               }}
               style={{ width: '100%', height: '400px' }}
+            />
+
+            <Label>Input (for programs that require user input)</Label>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Enter input here (e.g., for std::cin, input(), etc.)"
+              className="p-2 border rounded w-full h-24"
             />
 
             <Button onClick={handleCompile}>Compile and Run</Button>
