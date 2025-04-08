@@ -22,7 +22,11 @@ const Playground: React.FC = () => {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws') || 'ws://172.207.80.45:3001';
+    const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws').replace('https', 'wss');
+    if (!wsUrl) {
+      setError((prev) => [...prev, 'WebSocket URL is not defined']);
+      return;
+    }
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
