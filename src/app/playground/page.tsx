@@ -13,31 +13,34 @@ import 'ace-builds/src-noconflict/theme-monokai';
 const Playground: React.FC = () => {
   const [code, setCode] = useState('#include <iostream>\n#include <string>\n\nint main() {\n    std::string name;\n\n    std::cout << "Please enter your name: ";\n    std::getline(std::cin, name);\n\n    std::cout << "Your name is: " << name;\n    return 0;\n}');
   const [language, setLanguage] = useState('cpp');
-  const [output, setOutput] = useState<string[]>([]); // Store output as an array of lines
-  const [error, setError] = useState<string[]>([]); // Store errors as an array of lines
-  const [isRunning, setIsRunning] = useState(false); // Track if the program is running
-  const [waitingForInput, setWaitingForInput] = useState(false); // Track if the program is waiting for input
+  const [output, setOutput] = useState<string[]>([]);
+  const [error, setError] = useState<string[]>([]);
+  const [isRunning, setIsRunning] = useState(false);
+  const [waitingForInput, setWaitingForInput] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
 
-  // Initialize WebSocket connection
-  useEffect(() => {
+  const connectWebSocket = () => {
     const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws').replace('https', 'wss');
     if (!wsUrl) {
       setError((prev) => [...prev, 'WebSocket URL is not defined']);
       return;
     }
+
     wsRef.current = new WebSocket(wsUrl);
 
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');
+      reconnectAttempts.current = 0; // Reset reconnect attempts on successful connection
     };
 
     wsRef.current.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       if (msg.type === 'output') {
         setOutput((prev) => [...prev, msg.data]);
-        setWaitingForInput(true); // Assume the program might be waiting for input after output
+        setWaitingForInput(true);
       } else if (msg.type === 'error') {
         setError((prev) => [...prev, msg.data]);
         setWaitingForInput(false);
@@ -51,7 +54,28 @@ const Playground: React.FC = () => {
       console.log('WebSocket disconnected');
       setIsRunning(false);
       setWaitingForInput(false);
+
+      // Attempt to reconnect
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        setTimeout(() => {
+          console.log(`Reconnecting WebSocket... Attempt ${reconnectAttempts.current + 1}`);
+          reconnectAttempts.current += 1;
+          connectWebSocket();
+        }, 2000 * reconnectAttempts.current); // Exponential backoff: 0s, 2s, 4s, 6s, 8s
+      } else {
+        setError((prev) => [...prev, 'Max reconnection attempts reached. Please refresh the page.']);
+      }
     };
+
+    wsRef.current.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setError((prev) => [...prev, 'WebSocket connection failed']);
+    };
+  };
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    connectWebSocket();
 
     return () => {
       wsRef.current?.close();
@@ -60,7 +84,8 @@ const Playground: React.FC = () => {
 
   const handleCompile = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      setError((prev) => [...prev, 'WebSocket connection is not open']);
+      setError((prev) => [...prev, 'WebSocket connection is not open. Reconnecting...']);
+      connectWebSocket();
       return;
     }
 
@@ -77,7 +102,11 @@ const Playground: React.FC = () => {
 
   const handleInputSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!wsRef.current || !inputRef.current) return;
+    if (!wsRef.current || !inputRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      setError((prev) => [...prev, 'WebSocket connection is not open. Reconnecting...']);
+      connectWebSocket();
+      return;
+    }
 
     const userInput = inputRef.current.value;
     if (userInput) {
@@ -85,9 +114,9 @@ const Playground: React.FC = () => {
         type: 'input',
         data: userInput
       }));
-      setOutput((prev) => [...prev, userInput]); // Display the user's input in the output
-      inputRef.current.value = ''; // Clear the input field
-      setWaitingForInput(false); // Wait for the next prompt
+      setOutput((prev) => [...prev, userInput]);
+      inputRef.current.value = '';
+      setWaitingForInput(false);
     }
   };
 
