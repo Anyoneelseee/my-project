@@ -108,12 +108,15 @@ export default function Page() {
       professor_id: user.id,
     };
 
-    const { error } = await supabase.from("classes").insert([newClassData]);
+    const { data: insertData, error } = await supabase.from("classes").insert([newClassData]).select();
     if (error) {
       console.error("Error creating class:", error);
       alert("Failed to create class. Please try again.");
       return;
     }
+
+    console.log("Class created successfully:", insertData);
+    console.log("Generated class code:", code);
 
     // Fetch updated classes
     const { data, error: fetchError } = await supabase
@@ -124,6 +127,7 @@ export default function Page() {
     if (fetchError) {
       console.error("Error fetching updated classes:", fetchError);
     } else {
+      console.log("Updated classes:", data);
       setClasses(data || []);
     }
 

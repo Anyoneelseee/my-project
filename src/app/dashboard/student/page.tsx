@@ -58,12 +58,10 @@ interface RawSupabaseResult {
 
 // Type guard to validate the Class object
 function isClass(obj: unknown): obj is Class {
-  // Check if obj is an object and not null
   if (obj === null || typeof obj !== "object") {
     return false;
   }
 
-  // Now TypeScript knows obj is an object, so the 'in' operator is safe
   return (
     "id" in obj &&
     typeof obj.id === "string" &&
@@ -80,12 +78,10 @@ function isClass(obj: unknown): obj is Class {
 
 // Type guard to validate the ClassMember object
 function isClassMember(obj: unknown): obj is ClassMember {
-  // Check if obj is an object and not null
   if (obj === null || typeof obj !== "object") {
     return false;
   }
 
-  // Now TypeScript knows obj is an object, so the 'in' operator is safe
   return (
     "class_id" in obj &&
     typeof obj.class_id === "string" &&
@@ -126,7 +122,6 @@ export default function Page() {
       if (error) {
         console.error("Error fetching joined classes:", error);
       } else {
-        // Assert data as RawSupabaseResult[] and validate with type guard
         const validatedData = (data as RawSupabaseResult[]).filter(isClassMember);
         const joinedClasses = validatedData.map((member) => member.classes);
         setClasses(joinedClasses);
@@ -149,17 +144,38 @@ export default function Page() {
       redirect("/login");
     }
 
-    // Find the class by code
-    const { data: classData, error: classError } = await supabase
-      .from("classes")
-      .select("id")
-      .eq("code", classCode)
-      .single();
+    // Normalize the class code to uppercase and trim whitespace
+    const normalizedClassCode = classCode.trim().toUpperCase();
+    console.log("Normalized class code:", normalizedClassCode);
 
-    if (classError || !classData) {
+    // Find the class by code
+    const { data: classDataArray, error: classError } = await supabase
+      .from("classes")
+      .select("id, code")
+      .eq("code", normalizedClassCode);
+
+    if (classError) {
+      console.error("Error finding class:", classError);
+      console.log("Error details:", JSON.stringify(classError, null, 2));
+      alert("Error occurred while searching for the class. Please try again.");
+      return;
+    }
+
+    if (!classDataArray || classDataArray.length === 0) {
+      console.log("No class found with code:", normalizedClassCode);
+      console.log("Class data:", classDataArray);
       alert("Invalid class code. Please try again.");
       return;
     }
+
+    if (classDataArray.length > 1) {
+      console.error("Multiple classes found with code:", normalizedClassCode);
+      alert("Error: Multiple classes found with this code. Please contact support.");
+      return;
+    }
+
+    const classData = classDataArray[0];
+    console.log("Found class:", classData);
 
     // Join the class
     const { error: joinError } = await supabase
@@ -185,7 +201,6 @@ export default function Page() {
     if (fetchError) {
       console.error("Error fetching updated classes:", fetchError);
     } else {
-      // Assert data as RawSupabaseResult[] and validate with type guard
       const validatedData = (data as RawSupabaseResult[]).filter(isClassMember);
       const joinedClasses = validatedData.map((member) => member.classes);
       setClasses(joinedClasses);
