@@ -67,11 +67,6 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
         isActive: true,
       },
       {
-        title: "Join a Class",
-        url: "/dashboard/student/join-class",
-        icon: Users,
-      },
-      {
         title: "My Classes",
         url: "/dashboard/student/my-classes",
         icon: Users,

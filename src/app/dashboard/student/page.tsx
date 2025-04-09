@@ -34,6 +34,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { ClassCard } from "../professor/ClassCard";
+import Link from "next/link";
 
 // Interface for a class
 interface Class {
@@ -90,7 +92,7 @@ function isClassMember(obj: unknown): obj is ClassMember {
   );
 }
 
-export default function Page() {
+export default function StudentDashboard() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [classCode, setClassCode] = useState("");
@@ -151,7 +153,7 @@ export default function Page() {
     // Find the class by code
     const { data: classDataArray, error: classError } = await supabase
       .from("classes")
-      .select("id, code")
+      .select("id, code, section")
       .eq("code", normalizedClassCode);
 
     if (classError) {
@@ -177,10 +179,10 @@ export default function Page() {
     const classData = classDataArray[0];
     console.log("Found class:", classData);
 
-    // Join the class
+    // Join the class and set the section in class_members
     const { error: joinError } = await supabase
       .from("class_members")
-      .insert([{ class_id: classData.id, student_id: user.id }]);
+      .insert([{ class_id: classData.id, student_id: user.id, section: classData.section }]);
 
     if (joinError) {
       if (joinError.code === "23505") {
@@ -286,13 +288,14 @@ export default function Page() {
               </CardContent>
             </Card>
 
-            {/* Other Placeholder Cards */}
-            <Card className="bg-muted/50 aspect-video rounded-xl" />
-            <Card className="bg-muted/50 aspect-video rounded-xl" />
+            {/* Display Joined Classes */}
+            {classes.map((classData) => (
+              <Link href={`/dashboard/student/my-classes/${classData.id}`} key={classData.id}>
+                <ClassCard classData={classData} />
+              </Link>
+            ))}
           </div>
-
-          {/* Main Content Section */}
-          <Card className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
+          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
         </div>
       </SidebarInset>
     </SidebarProvider>

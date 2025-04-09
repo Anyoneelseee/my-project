@@ -1,7 +1,6 @@
 // src/app/dashboard/professor/[classId]/page.tsx
-/* eslint-disable @next/next/no-img-element */
 "use client";
-import Image from "next/image";
+
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +8,7 @@ import { getUserRole } from "@/lib/auth";
 import { CreateActivityDialog } from "../CreateActivityDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Image from "next/image";
 
 interface Class {
   id: string;
@@ -30,6 +30,16 @@ interface Activity {
   description: string;
   image_url: string | null;
   created_at: string;
+}
+
+interface ClassMember {
+  student_id: string;
+  section: string | null;
+  users: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+  }; // Changed to single object instead of array
 }
 
 export default function ClassDetailsPage() {
@@ -70,55 +80,68 @@ export default function ClassDetailsPage() {
       console.log("Fetched class data:", classData);
       setClassData(classData);
 
-      // Fetch students who joined this class
-      const { data: members, error: membersError } = await supabase
+      // Fetch students who joined this class with a join query
+      const { data: membersData, error: membersError } = await supabase
         .from("class_members")
-        .select("student_id")
+        .select(
+          `
+          student_id,
+          section,
+          users (
+            id,
+            first_name,
+            last_name
+          )
+        `
+        )
         .eq("class_id", classId);
 
       if (membersError) {
         console.error("Error fetching class members:", membersError);
         setStudents([]);
-      } else if (!members || members.length === 0) {
+      } else if (!membersData || membersData.length === 0) {
         console.log("No students have joined this class.");
         setStudents([]);
       } else {
-        // Fetch user details for each student
-        const studentIds = members.map((member) => member.student_id);
-        console.log("Student IDs to fetch:", studentIds);
+        console.log("Fetched class members data:", membersData);
+        // Log each member's users field to debug
+        membersData.forEach((member, index) => {
+          console.log(`Member ${index} users:`, member.users);
+        });
 
-        if (studentIds.length === 0) {
-          console.log("No student IDs to fetch.");
-          setStudents([]);
-        } else {
-          const { data: users, error: usersError } = await supabase
-            .from("users")
-            .select("id, first_name, last_name, section")
-            .in("id", studentIds);
+        // Process the joined data with proper typing
+        const studentsData = (membersData as unknown as ClassMember[])
+          .filter((member) => {
+            const hasUsers = member.users !== null && member.users !== undefined;
+            if (!hasUsers) {
+              console.log("Filtered out member due to missing users:", member);
+            }
+            return hasUsers;
+          })
+          .map((member) => ({
+            id: member.users.id,
+            first_name: member.users.first_name || "Unknown",
+            last_name: member.users.last_name || "",
+            section: member.section,
+          }));
 
-          if (usersError) {
-            console.error("Error fetching student details:", usersError);
-            setStudents([]);
-          } else if (!users || users.length === 0) {
-            console.log("No students found for the given IDs (possibly due to RLS).");
-            setStudents([]);
-          } else {
-            console.log("Fetched student data:", users);
-            // Filter students by section in code
-            const filteredStudents = classData.section
-              ? users.filter((user) => user.section === classData.section)
-              : users;
+        console.log("Processed students data:", studentsData);
 
-            const studentsData = filteredStudents.map((user) => ({
-              id: user.id,
-              first_name: user.first_name || "Unknown",
-              last_name: user.last_name || "",
-              section: user.section,
-            }));
-            console.log("Filtered students:", studentsData);
-            setStudents(studentsData);
-          }
-        }
+        // Filter students by section if classData.section is defined
+        const filteredStudents = classData.section
+          ? studentsData.filter((student) => {
+              console.log(
+                `Comparing student section: ${student.section} with class section: ${classData.section}`
+              );
+              if (student.section === null) {
+                return classData.section === null;
+              }
+              return student.section === classData.section;
+            })
+          : studentsData;
+
+        console.log("Filtered students:", filteredStudents);
+        setStudents(filteredStudents);
       }
 
       // Fetch activities for this class
@@ -233,7 +256,9 @@ export default function ClassDetailsPage() {
                     <Image
                       src={activity.image_url}
                       alt="Activity"
-                      className="mt-2 max-w-xs"
+                      width={300}
+                      height={200}
+                      className="mt-2 rounded-md"
                     />
                   </div>
                 )}
