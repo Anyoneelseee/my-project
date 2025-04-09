@@ -27,6 +27,7 @@
     "framer-motion": "^12.6.2",
     "lucide-react": "^0.485.0",
     "motion": "^12.6.2",
+    "nanoid": "^5.1.5",
     "next": "15.2.4",
     "react": "^19.0.0",
     "react-ace": "^14.0.1",
