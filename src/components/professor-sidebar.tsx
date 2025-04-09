@@ -66,11 +66,11 @@ export function ProfessorSidebar({
       },
       {
         title: "Created Classes",
-        url: "/dashboard/professor/created-classes",
+        url: "/dashboard/professor", // Points to the main dashboard
         icon: PlusCircle,
         items: classes.map((cls) => ({
           title: `${cls.name} (${cls.section})`,
-          url: `/dashboard/professor/created-classes/${cls.id}`,
+          url: `/dashboard/professor/${cls.id}`, // Updated to match the dynamic route
         })),
       },
     ],
