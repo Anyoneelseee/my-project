@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Add useCallback import
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,6 @@ const Playground: React.FC = () => {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
 
-  // Wrap connectWebSocket in useCallback to memoize it
   const connectWebSocket = useCallback(() => {
     const wsUrl = process.env.NEXT_PUBLIC_COMPILER_SERVER_URL?.replace('http', 'ws').replace('https', 'wss');
     if (!wsUrl) {
@@ -34,7 +33,7 @@ const Playground: React.FC = () => {
 
     wsRef.current.onopen = () => {
       console.log('WebSocket connected');
-      reconnectAttempts.current = 0; // Reset reconnect attempts on successful connection
+      reconnectAttempts.current = 0;
     };
 
     wsRef.current.onmessage = (event) => {
@@ -56,13 +55,12 @@ const Playground: React.FC = () => {
       setIsRunning(false);
       setWaitingForInput(false);
 
-      // Attempt to reconnect
       if (reconnectAttempts.current < maxReconnectAttempts) {
         setTimeout(() => {
           console.log(`Reconnecting WebSocket... Attempt ${reconnectAttempts.current + 1}`);
           reconnectAttempts.current += 1;
           connectWebSocket();
-        }, 2000 * reconnectAttempts.current); // Exponential backoff: 0s, 2s, 4s, 6s, 8s
+        }, 2000 * reconnectAttempts.current);
       } else {
         setError((prev) => [...prev, 'Max reconnection attempts reached. Please refresh the page.']);
       }
@@ -72,16 +70,15 @@ const Playground: React.FC = () => {
       console.error('WebSocket error:', error);
       setError((prev) => [...prev, 'WebSocket connection failed']);
     };
-  }, [setOutput, setError, setIsRunning, setWaitingForInput]); // Add state setters as dependencies
+  }, [setOutput, setError, setIsRunning, setWaitingForInput]);
 
-  // Initialize WebSocket connection
   useEffect(() => {
     connectWebSocket();
 
     return () => {
       wsRef.current?.close();
     };
-  }, [connectWebSocket]); // connectWebSocket is now stable
+  }, [connectWebSocket]);
 
   const handleCompile = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
