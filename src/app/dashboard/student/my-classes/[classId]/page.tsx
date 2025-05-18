@@ -8,7 +8,6 @@ import ActivitiesList from "./components/ActivitiesList";
 import CodeEditorSection from "./components/CodeEditorSection";
 import ClassDetails from "./components/ClassDetails";
 
-
 interface Class {
   id: string;
   name: string;
@@ -28,56 +27,89 @@ export default function JoinedClassPage() {
   const { classId } = useParams();
   const router = useRouter();
   const [classData, setClassData] = useState<Class | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]); // Explicitly type as Activity[]
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const initialize = async () => {
-      const role = await getUserRole();
-      if (!role) return router.push("/login");
-      if (role !== "student") return router.push("/dashboard/professor");
+      setIsLoading(true);
+      try {
+        // Wait for Supabase to restore session
+        await new Promise((resolve) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+              resolve(session);
+            }
+          });
+          return () => subscription.unsubscribe();
+        });
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return router.push("/login");
+        // Check for existing session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error("No session found:", sessionError?.message);
+          router.push("/login");
+          return;
+        }
 
-      const { data: membershipData, error: membershipError } = await supabase
-        .from("class_members")
-        .select("class_id")
-        .eq("class_id", classId)
-        .eq("student_id", user.id)
-        .single();
+        // Verify user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.error("Auth error:", authError?.message);
+          router.push("/login");
+          return;
+        }
 
-      if (membershipError || !membershipData) {
-        console.error("Error verifying class membership:", membershipError);
-        return router.push("/dashboard/student");
+        // Check user role
+        const role = await getUserRole();
+        if (!role) {
+          router.push("/login");
+          return;
+        }
+        if (role !== "student") {
+          router.push("/dashboard/professor");
+          return;
+        }
+
+        // Verify class membership and get class data
+        const { data: membershipData, error: membershipError } = await supabase
+          .rpc("get_student_classes")
+          .eq("id", classId);
+
+        if (membershipError || !membershipData || membershipData.length === 0) {
+          console.error("Error verifying class membership:", membershipError?.message, membershipError?.details, membershipError?.hint);
+          router.push("/dashboard/student");
+          return;
+        }
+
+        // Set class data
+        const classData = membershipData[0] as Class;
+        setClassData(classData);
+
+        // Fetch activities
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .rpc("get_student_activities", { class_id: classId });
+
+        if (activitiesError) {
+          console.error("Error fetching activities:", activitiesError.message, activitiesError.details, activitiesError.hint);
+          setActivities([]);
+        } else {
+          const validatedActivities = (activitiesData as Activity[]).filter(
+            (act): act is Activity =>
+              act &&
+              typeof act.id === "string" &&
+              typeof act.description === "string" &&
+              (act.image_url === null || typeof act.image_url === "string") &&
+              typeof act.created_at === "string"
+          );
+          setActivities(validatedActivities);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        router.push("/dashboard/student");
+      } finally {
+        setIsLoading(false);
       }
-
-      const { data: classData, error: classError } = await supabase
-        .from("classes")
-        .select("*")
-        .eq("id", classId)
-        .single();
-
-      if (classError || !classData) {
-        console.error("Error fetching class:", classError);
-        return router.push("/dashboard/student");
-      }
-
-      setClassData(classData);
-
-      const { data: activitiesData, error: activitiesError } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("class_id", classId);
-
-      if (activitiesError) {
-        console.error("Error fetching activities:", activitiesError);
-        setActivities([]); // Empty array of Activity[]
-      } else {
-        setActivities(activitiesData || []); // Type inference should work with Activity[]
-      }
-
-      setIsLoading(false);
     };
 
     initialize();
@@ -90,7 +122,7 @@ export default function JoinedClassPage() {
     <div className="p-4">
       <ClassDetails classData={classData} />
       <ActivitiesList activities={activities} />
-      <CodeEditorSection classId={classId as string} /> {/* Cast classId to string */}
+      <CodeEditorSection classId={classId as string} />
     </div>
   );
 }

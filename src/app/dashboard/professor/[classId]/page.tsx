@@ -1,4 +1,3 @@
-// src/app/dashboard/professor/[classId]/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -19,7 +18,7 @@ interface Class {
 }
 
 interface Student {
-  id: string;
+  student_id: string;
   first_name: string;
   last_name: string;
   section: string | null;
@@ -30,16 +29,6 @@ interface Activity {
   description: string;
   image_url: string | null;
   created_at: string;
-}
-
-interface ClassMember {
-  student_id: string;
-  section: string | null;
-  users: {
-    id: string;
-    first_name: string | null;
-    last_name: string | null;
-  }; // Changed to single object instead of array
 }
 
 export default function ClassDetailsPage() {
@@ -53,134 +42,117 @@ export default function ClassDetailsPage() {
 
   useEffect(() => {
     const initialize = async () => {
-      // Check user role
-      const role = await getUserRole();
-      if (!role) {
-        router.push("/login");
-        return;
-      }
-      if (role !== "professor") {
-        router.push("/dashboard/student");
-        return;
-      }
-
-      // Fetch class details
-      const { data: classData, error: classError } = await supabase
-        .from("classes")
-        .select("*")
-        .eq("id", classId)
-        .single();
-
-      if (classError || !classData) {
-        console.error("Error fetching class:", classError);
-        router.push("/dashboard/professor");
-        return;
-      }
-
-      console.log("Fetched class data:", classData);
-      setClassData(classData);
-
-      // Fetch students who joined this class with a join query
-      const { data: membersData, error: membersError } = await supabase
-        .from("class_members")
-        .select(
-          `
-          student_id,
-          section,
-          users (
-            id,
-            first_name,
-            last_name
-          )
-        `
-        )
-        .eq("class_id", classId);
-
-      if (membersError) {
-        console.error("Error fetching class members:", membersError);
-        setStudents([]);
-      } else if (!membersData || membersData.length === 0) {
-        console.log("No students have joined this class.");
-        setStudents([]);
-      } else {
-        console.log("Fetched class members data:", membersData);
-        // Log each member's users field to debug
-        membersData.forEach((member, index) => {
-          console.log(`Member ${index} users:`, member.users);
+      setIsLoading(true);
+      try {
+        // Wait for Supabase to restore session
+        await new Promise((resolve) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+              resolve(session);
+            }
+          });
+          return () => subscription.unsubscribe();
         });
 
-        // Process the joined data with proper typing
-        const studentsData = (membersData as unknown as ClassMember[])
-          .filter((member) => {
-            const hasUsers = member.users !== null && member.users !== undefined;
-            if (!hasUsers) {
-              console.log("Filtered out member due to missing users:", member);
-            }
-            return hasUsers;
-          })
-          .map((member) => ({
-            id: member.users.id,
-            first_name: member.users.first_name || "Unknown",
-            last_name: member.users.last_name || "",
-            section: member.section,
-          }));
+        // Check for existing session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error("No session found:", sessionError?.message);
+          router.push("/login");
+          return;
+        }
 
-        console.log("Processed students data:", studentsData);
+        // Verify user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.error("Auth error:", authError?.message);
+          router.push("/login");
+          return;
+        }
 
-        // Filter students by section if classData.section is defined
-        const filteredStudents = classData.section
-          ? studentsData.filter((student) => {
-              console.log(
-                `Comparing student section: ${student.section} with class section: ${classData.section}`
-              );
-              if (student.section === null) {
-                return classData.section === null;
-              }
-              return student.section === classData.section;
-            })
-          : studentsData;
+        // Check user role
+        const role = await getUserRole();
+        if (!role) {
+          router.push("/login");
+          return;
+        }
+        if (role !== "professor") {
+          router.push("/dashboard/student");
+          return;
+        }
 
-        console.log("Filtered students:", filteredStudents);
-        setStudents(filteredStudents);
+        // Fetch class using RPC
+        const { data: classDataArray, error: classError } = await supabase
+          .rpc("get_professor_classes")
+          .eq("id", classId);
+
+        if (classError || !classDataArray || classDataArray.length === 0) {
+          console.error("Error fetching class:", classError?.message, classError?.details, classError?.hint);
+          router.push("/dashboard/professor");
+          return;
+        }
+
+        const classData = classDataArray[0] as Class;
+        setClassData(classData);
+
+        // Fetch students using function
+        const { data: studentsData, error: studentsError } = await supabase
+          .rpc("get_class_student_profiles", { class_id_input: classId });
+
+        if (studentsError) {
+          console.error("Error fetching students:", studentsError.message, studentsError.details, studentsError.hint);
+          setStudents([]);
+        } else if (!studentsData || studentsData.length === 0) {
+          console.log("No students have joined this class.");
+          setStudents([]);
+        } else {
+          console.log("Fetched students data:", studentsData);
+
+          const filteredStudents = classData.section
+            ? studentsData.filter((student: Student) => student.section === classData.section)
+            : studentsData;
+
+          console.log("Filtered students:", filteredStudents);
+          setStudents(filteredStudents);
+        }
+
+        // Fetch activities for this class
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("class_id", classId);
+
+        if (activitiesError) {
+          console.error("Error fetching activities:", activitiesError.message, activitiesError.details, activitiesError.hint);
+          setActivities([]);
+        } else {
+          console.log("Fetched activities:", activitiesData);
+          setActivities(activitiesData || []);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        router.push("/dashboard/professor");
+      } finally {
+        setIsLoading(false);
       }
-
-      // Fetch activities for this class
-      const { data: activitiesData, error: activitiesError } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("class_id", classId);
-
-      if (activitiesError) {
-        console.error("Error fetching activities:", activitiesError);
-        setActivities([]);
-      } else {
-        console.log("Fetched activities:", activitiesData);
-        setActivities(activitiesData || []);
-      }
-
-      setIsLoading(false);
     };
 
     initialize();
   }, [classId, router]);
 
-  const handleActivityCreated = () => {
+  const handleActivityCreated = async () => {
     console.log("Activity created, refreshing activities...");
-    // Refresh activities after creating a new one
-    const fetchActivities = async () => {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("class_id", classId);
+    const { data, error } = await supabase
+      .from("activities")
+      .select("*")
+      .eq("class_id", classId);
 
-      if (error) {
-        console.error("Error fetching activities:", error);
-      } else {
-        setActivities(data || []);
-      }
-    };
-
-    fetchActivities();
+    if (error) {
+      console.error("Error fetching updated activities:", error.message, error.details, error.hint);
+      setActivities([]);
+    } else {
+      setActivities(data || []);
+    }
   };
 
   if (isLoading) {
@@ -205,7 +177,6 @@ export default function ClassDetailsPage() {
         </CardContent>
       </Card>
 
-      {/* Create Activity Button */}
       <div className="mb-4">
         <Button
           onClick={() => setIsActivityDialogOpen(true)}
@@ -221,7 +192,6 @@ export default function ClassDetailsPage() {
         />
       </div>
 
-      {/* List of Students */}
       <div className="mb-4">
         <h3 className="text-lg font-semibold mb-2">
           Students Joined (Section: {classData.section || "N/A"}):
@@ -233,7 +203,7 @@ export default function ClassDetailsPage() {
         ) : (
           <ul className="list-disc pl-5">
             {students.map((student) => (
-              <li key={student.id}>
+              <li key={student.student_id}>
                 {student.first_name} {student.last_name} (Section: {student.section || "N/A"})
               </li>
             ))}
@@ -241,7 +211,6 @@ export default function ClassDetailsPage() {
         )}
       </div>
 
-      {/* List of Activities */}
       <div>
         <h3 className="text-lg font-semibold mb-2">Activities:</h3>
         {activities.length === 0 ? (

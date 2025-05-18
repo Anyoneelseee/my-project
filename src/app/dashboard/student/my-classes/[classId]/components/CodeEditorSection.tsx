@@ -8,7 +8,7 @@ import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/mode-python";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-monokai";
-import "ace-builds/src-noconflict/ext-language_tools"; // Add language tools
+import "ace-builds/src-noconflict/ext-language_tools";
 
 export default function CodeEditorSection({ classId }: { classId: string }) {
   const [code, setCode] = useState<string>("// Write your code here\nconsole.log('Hello, World!');");
@@ -75,7 +75,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       const code = editorRef.current?.editor.getValue() ?? "";
       const fileExtension = language === "python" ? "py" : language === "cpp" ? "cpp" : "js";
       const token = window.__supabaseSession?.access_token || "";
-      console.log("Submitting with token:", token); // Debug token
+      console.log("Submitting with token:", token);
 
       const response = await fetch("/api/studentsubmit_code", {
         method: "POST",

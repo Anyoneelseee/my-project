@@ -1,17 +1,37 @@
-// src/lib/auth.ts
 import { supabase } from "./supabase";
 
-export const getUserRole = async () => {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData?.user) return null;
+export async function getUserRole() {
+  try {
+    // Ensure session exists
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      console.error("getUserRole - No session:", sessionError?.message);
+      return null;
+    }
 
-  const { data: profile, error: profileError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", authData.user.id)
-    .maybeSingle();
+    // Get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error("getUserRole - User fetch error:", userError?.message);
+      return null;
+    }
 
-  if (profileError) return null;
+    // Fetch user profile
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
 
-  return profile?.role ?? null;
-};
+    if (profileError) {
+      console.error("getUserRole - Profile query error:", profileError.message, profileError.details, profileError.hint);
+      return null;
+    }
+
+    console.log("getUserRole - Profile fetched:", profile);
+    return profile?.role || null;
+  } catch (err) {
+    console.error("getUserRole - Unexpected error:", err);
+    return null;
+  }
+}

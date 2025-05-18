@@ -9,6 +9,8 @@ export async function createSupabaseServerClient(request?: Request) {
 
   let authHeader: string | null = null;
   if (request) {
+    const headers = Object.fromEntries(request.headers.entries());
+    console.log("All request headers:", headers);
     authHeader = request.headers.get("Authorization")?.replace("Bearer ", "") ?? null;
     console.log("Auth header received:", authHeader || "not found");
   }

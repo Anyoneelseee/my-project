@@ -1,7 +1,9 @@
-// src/app/dashboard/professor/ProfessorDashboard.tsx
 "use client";
 
 import { useState, useEffect } from "react";
+import { redirect } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { getUserRole } from "@/lib/auth";
 import { ProfessorSidebar } from "@/components/professor-sidebar";
 import {
   Breadcrumb,
@@ -18,9 +20,6 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { CreateClassDialog } from "./CreateClassDialog";
 import { ClassCodeDialog } from "./ClassCodeDialog";
 import { ClassCard } from "./ClassCard";
@@ -43,89 +42,146 @@ export default function ProfessorDashboard() {
   const [classCode, setClassCode] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch user role and classes on mount
   useEffect(() => {
     const initialize = async () => {
-      // Check user role
-      const role = await getUserRole();
-      if (!role) {
-        redirect("/login");
-      }
-      if (role !== "professor") {
-        redirect("/dashboard/student");
-      }
+      setIsLoading(true);
+      try {
+        // Wait for Supabase to restore session
+        await new Promise((resolve) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+              resolve(session);
+            }
+          });
+          return () => subscription.unsubscribe();
+        });
 
-      // Fetch classes
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        redirect("/login");
-      }
+        // Check for existing session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error("No session found:", sessionError?.message);
+          redirect("/login");
+          return;
+        }
 
-      const { data, error } = await supabase
-        .from("classes")
-        .select("*")
-        .eq("professor_id", user.id);
+        // Verify user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.error("Auth error:", authError?.message);
+          redirect("/login");
+          return;
+        }
 
-      if (error) {
-        console.error("Error fetching classes:", error);
-      } else {
-        setClasses(data || []);
+        // Check user role
+        const role = await getUserRole();
+        if (!role) {
+          redirect("/login");
+          return;
+        }
+        if (role !== "professor") {
+          redirect("/dashboard/student");
+          return;
+        }
+
+        // Fetch classes using RPC
+        const { data, error } = await supabase
+          .rpc("get_professor_classes");
+
+        if (error) {
+          console.error("Error fetching classes:", error.message, error.details, error.hint);
+          setClasses([]);
+        } else {
+          const validatedClasses = (data as Class[]).filter(
+            (cls): cls is Class =>
+              cls &&
+              typeof cls.id === "string" &&
+              typeof cls.name === "string" &&
+              typeof cls.section === "string" &&
+              typeof cls.course === "string" &&
+              typeof cls.code === "string"
+          );
+          setClasses(validatedClasses);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        setClasses([]);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     initialize();
   }, []);
 
-  // Handle form submission to create a class
   const handleCreateClass = async () => {
     if (!newClass.name || !newClass.section || !newClass.course) {
       alert("Please fill in all fields.");
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      redirect("/login");
+    try {
+      // Ensure session is valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("No session in create class:", sessionError?.message);
+        redirect("/login");
+        return;
+      }
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error("Auth error in create class:", authError?.message);
+        redirect("/login");
+        return;
+      }
+
+      // Generate a unique class code
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newClassData = {
+        name: newClass.name,
+        section: newClass.section,
+        course: newClass.course,
+        code,
+        professor_id: user.id,
+      };
+
+      const { error } = await supabase
+        .from("classes")
+        .insert([newClassData]);
+
+      if (error) {
+        console.error("Error creating class:", error.message, error.details, error.hint);
+        alert("Failed to create class. Please try again.");
+        return;
+      }
+
+      // Fetch updated classes
+      const { data, error: fetchError } = await supabase
+        .rpc("get_professor_classes");
+
+      if (fetchError) {
+        console.error("Error fetching updated classes:", fetchError.message, fetchError.details, fetchError.hint);
+      } else {
+        const validatedClasses = (data as Class[]).filter(
+          (cls): cls is Class =>
+            cls &&
+            typeof cls.id === "string" &&
+            typeof cls.name === "string" &&
+            typeof cls.section === "string" &&
+            typeof cls.course === "string" &&
+            typeof cls.code === "string"
+        );
+        setClasses(validatedClasses);
+      }
+
+      setClassCode(code);
+      setNewClass({ name: "", section: "", course: "" });
+      setIsCreateDialogOpen(false);
+      setIsCodeDialogOpen(true);
+    } catch (err) {
+      console.error("Unexpected error in create class:", err);
+      alert("An unexpected error occurred. Please try again.");
     }
-
-    // Generate a unique class code
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newClassData = {
-      name: newClass.name,
-      section: newClass.section,
-      course: newClass.course,
-      code,
-      professor_id: user.id,
-    };
-
-    const { data: insertData, error } = await supabase.from("classes").insert([newClassData]).select();
-    if (error) {
-      console.error("Error creating class:", error);
-      alert("Failed to create class. Please try again.");
-      return;
-    }
-
-    console.log("Class created successfully:", insertData);
-    console.log("Generated class code:", code);
-
-    // Fetch updated classes
-    const { data, error: fetchError } = await supabase
-      .from("classes")
-      .select("*")
-      .eq("professor_id", user.id);
-
-    if (fetchError) {
-      console.error("Error fetching updated classes:", fetchError);
-    } else {
-      console.log("Updated classes:", data);
-      setClasses(data || []);
-    }
-
-    setClassCode(code);
-    setNewClass({ name: "", section: "", course: "" });
-    setIsCreateDialogOpen(false);
-    setIsCodeDialogOpen(true);
   };
 
   if (isLoading) {

@@ -21,58 +21,81 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      // Sign in
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (error) {
-        setError(error.message);
+      if (signInError) {
+        console.error("Login error:", signInError.message);
+        setError(signInError.message);
         setLoading(false);
         return;
       }
 
-      console.log("Login successful, session:", data.session);
-
-      // Explicitly set session
-      if (data.session) {
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-        // Store session in global for API requests
-        window.__supabaseSession = {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-          expires_at: data.session.expires_at ?? undefined,
-        };
-        console.log("Set window.__supabaseSession:", window.__supabaseSession);
+      if (!data.session) {
+        console.error("No session returned after login");
+        setError("Login failed. Please try again.");
+        setLoading(false);
+        return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log("Current session:", sessionData);
+      // Verify session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("Session verification failed:", sessionError?.message);
+        setError("Session verification failed. Please try again.");
+        setLoading(false);
+        return;
+      }
 
+      // Get user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error("Error fetching user:", userError?.message);
+        setError("Failed to verify user. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      // Fetch role
       const role = await getUserRole();
-
       if (!role) {
-        const { data: authData } = await supabase.auth.getUser();
+        // Check if user exists in users table
+        const { data: existingUser, error: userError } = await supabase
+          .from("users")
+          .select("id, role")
+          .eq("id", user.id)
+          .single();
 
-        if (authData?.user) {
-          const { data: existingUser } = await supabase
+        if (userError && userError.code !== "PGRST116") { // PGRST116: no rows found
+          console.error("Error fetching user profile:", userError.message, userError.details, userError.hint);
+          setError("Failed to verify user profile. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        if (!existingUser) {
+          // Insert new user profile
+          const { error: insertError } = await supabase
             .from("users")
-            .select("id")
-            .eq("id", authData.user.id)
-            .single();
-
-          if (!existingUser) {
-            await supabase.from("users").insert([{ id: authData.user.id, role: null }]);
+            .insert([{ id: user.id, role: null }]);
+          if (insertError) {
+            console.error("Error inserting user profile:", insertError.message, insertError.details, insertError.hint);
+            setError("Failed to create user profile. Please try again.");
+            setLoading(false);
+            return;
           }
         }
+
         router.push("/choose-role");
       } else {
         router.push(`/dashboard/${role}`);
       }
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Unexpected login error:", err);
       setError("An unexpected error occurred. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -88,7 +111,7 @@ export default function LoginPage() {
               width={24}
               height={24}
               className="rounded-md"
-              priority // Add priority for LCP
+              priority
             />
             Carma
           </Link>
@@ -113,7 +136,7 @@ export default function LoginPage() {
           className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
           width={300}
           height={300}
-          priority // Add priority for LCP
+          priority
         />
       </div>
     </div>

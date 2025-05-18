@@ -1,7 +1,9 @@
-// src/app/dashboard/student/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
+import { redirect } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { getUserRole } from "@/lib/auth";
 import { StudentSidebar } from "@/components/student-sidebar";
 import {
   Breadcrumb,
@@ -31,9 +33,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { ClassCard } from "../professor/ClassCard";
 import Link from "next/link";
 
@@ -46,89 +45,75 @@ interface Class {
   code: string;
 }
 
-// Interface for a class member (returned by Supabase query)
-interface ClassMember {
-  class_id: string;
-  classes: Class;
-}
-
-// Interface for the raw Supabase query result (matches TypeScript's inference)
-interface RawSupabaseResult {
-  class_id: unknown;
-  classes: unknown;
-}
-
-// Type guard to validate the Class object
-function isClass(obj: unknown): obj is Class {
-  if (obj === null || typeof obj !== "object") {
-    return false;
-  }
-
-  return (
-    "id" in obj &&
-    typeof obj.id === "string" &&
-    "name" in obj &&
-    typeof obj.name === "string" &&
-    "section" in obj &&
-    typeof obj.section === "string" &&
-    "course" in obj &&
-    typeof obj.course === "string" &&
-    "code" in obj &&
-    typeof obj.code === "string"
-  );
-}
-
-// Type guard to validate the ClassMember object
-function isClassMember(obj: unknown): obj is ClassMember {
-  if (obj === null || typeof obj !== "object") {
-    return false;
-  }
-
-  return (
-    "class_id" in obj &&
-    typeof obj.class_id === "string" &&
-    "classes" in obj &&
-    isClass(obj.classes)
-  );
-}
-
 export default function StudentDashboard() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
   const [classCode, setClassCode] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch user role and joined classes on mount
   useEffect(() => {
     const initialize = async () => {
-      // Check user role
-      const role = await getUserRole();
-      if (!role) {
-        redirect("/login");
-      }
-      if (role !== "student") {
-        redirect("/dashboard/professor");
-      }
+      setIsLoading(true);
+      try {
+        // Wait for Supabase to restore session
+        await new Promise((resolve) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+              resolve(session);
+            }
+          });
+          return () => subscription.unsubscribe();
+        });
 
-      // Fetch joined classes
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        redirect("/login");
-      }
+        // Check for existing session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          console.error("No session found:", sessionError?.message);
+          redirect("/login");
+        }
 
-      const { data, error } = await supabase
-        .from("class_members")
-        .select("class_id, classes!inner(*)")
-        .eq("student_id", user.id);
+        // Verify user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          console.error("Auth error:", authError?.message);
+          redirect("/login");
+        }
 
-      if (error) {
-        console.error("Error fetching joined classes:", error);
-      } else {
-        const validatedData = (data as RawSupabaseResult[]).filter(isClassMember);
-        const joinedClasses = validatedData.map((member) => member.classes);
-        setClasses(joinedClasses);
+        // Check user role
+        const role = await getUserRole();
+        if (!role) {
+          redirect("/login");
+        }
+        if (role !== "student") {
+          redirect("/dashboard/professor");
+        }
+
+        // Fetch joined classes via RPC
+        const { data, error } = await supabase
+          .rpc("get_student_classes");
+
+        if (error) {
+          console.error("Error fetching joined classes:", error.message, error.details, error.hint);
+          setClasses([]);
+        } else {
+          // Validate and set classes
+          const validatedClasses = (data as Class[]).filter(
+            (cls): cls is Class =>
+              cls &&
+              typeof cls.id === "string" &&
+              typeof cls.name === "string" &&
+              typeof cls.section === "string" &&
+              typeof cls.course === "string" &&
+              typeof cls.code === "string"
+          );
+          setClasses(validatedClasses);
+        }
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        setClasses([]);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     initialize();
@@ -141,76 +126,84 @@ export default function StudentDashboard() {
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      redirect("/login");
-    }
-
-    // Normalize the class code to uppercase and trim whitespace
-    const normalizedClassCode = classCode.trim().toUpperCase();
-    console.log("Normalized class code:", normalizedClassCode);
-
-    // Find the class by code
-    const { data: classDataArray, error: classError } = await supabase
-      .from("classes")
-      .select("id, code, section")
-      .eq("code", normalizedClassCode);
-
-    if (classError) {
-      console.error("Error finding class:", classError);
-      console.log("Error details:", JSON.stringify(classError, null, 2));
-      alert("Error occurred while searching for the class. Please try again.");
-      return;
-    }
-
-    if (!classDataArray || classDataArray.length === 0) {
-      console.log("No class found with code:", normalizedClassCode);
-      console.log("Class data:", classDataArray);
-      alert("Invalid class code. Please try again.");
-      return;
-    }
-
-    if (classDataArray.length > 1) {
-      console.error("Multiple classes found with code:", normalizedClassCode);
-      alert("Error: Multiple classes found with this code. Please contact support.");
-      return;
-    }
-
-    const classData = classDataArray[0];
-    console.log("Found class:", classData);
-
-    // Join the class and set the section in class_members
-    const { error: joinError } = await supabase
-      .from("class_members")
-      .insert([{ class_id: classData.id, student_id: user.id, section: classData.section }]);
-
-    if (joinError) {
-      if (joinError.code === "23505") {
-        alert("You are already a member of this class.");
-      } else {
-        console.error("Error joining class:", joinError);
-        alert("Failed to join class. Please try again.");
+    try {
+      // Ensure session is valid
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        console.error("No session in join class:", sessionError?.message);
+        redirect("/login");
       }
-      return;
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error("Auth error in join class:", authError?.message);
+        redirect("/login");
+      }
+
+      // Normalize the class code
+      const normalizedClassCode = classCode.trim().toUpperCase();
+      console.log("Normalized class code:", normalizedClassCode);
+
+      // Find the class by code using RPC
+      const { data: classDataArray, error: classError } = await supabase
+        .rpc("get_class_by_code", { class_code: normalizedClassCode });
+
+      if (classError) {
+        console.error("Error finding class:", classError.message, classError.details, classError.hint);
+        alert(classError.message || "Error occurred while searching for the class. Please try again.");
+        return;
+      }
+
+      if (!classDataArray || classDataArray.length === 0) {
+        console.log("No class found with code:", normalizedClassCode);
+        alert("Invalid class code. Please try again.");
+        return;
+      }
+
+      const classData = classDataArray[0];
+      console.log("Found class:", classData);
+
+      // Join the class
+      const { error: joinError } = await supabase
+        .from("class_members")
+        .insert([{ class_id: classData.id, student_id: user.id, section: classData.section }]);
+
+      if (joinError) {
+        if (joinError.code === "23505") {
+          alert("You are already a member of this class.");
+        } else {
+          console.error("Error joining class:", joinError.message, joinError.details, joinError.hint);
+          alert("Failed to join class. Please try again.");
+        }
+        return;
+      }
+
+      // Fetch updated joined classes
+      const { data, error: fetchError } = await supabase
+        .rpc("get_student_classes");
+
+      if (fetchError) {
+        console.error("Error fetching updated classes:", fetchError.message, fetchError.details, fetchError.hint);
+      } else {
+        const validatedClasses = (data as Class[]).filter(
+          (cls): cls is Class =>
+            cls &&
+            typeof cls.id === "string" &&
+            typeof cls.name === "string" &&
+            typeof cls.section === "string" &&
+            typeof cls.course === "string" &&
+            typeof cls.code === "string"
+        );
+        setClasses(validatedClasses);
+      }
+
+      setClassCode("");
+      setIsJoinDialogOpen(false);
+      alert("Successfully joined the class!");
+    } catch (err) {
+      console.error("Unexpected error in join class:", err);
+      alert("An unexpected error occurred. Please try again.");
     }
-
-    // Fetch updated joined classes
-    const { data, error: fetchError } = await supabase
-      .from("class_members")
-      .select("class_id, classes!inner(*)")
-      .eq("student_id", user.id);
-
-    if (fetchError) {
-      console.error("Error fetching updated classes:", fetchError);
-    } else {
-      const validatedData = (data as RawSupabaseResult[]).filter(isClassMember);
-      const joinedClasses = validatedData.map((member) => member.classes);
-      setClasses(joinedClasses);
-    }
-
-    setClassCode("");
-    setIsJoinDialogOpen(false);
-    alert("Successfully joined the class!");
   };
 
   if (isLoading) {
