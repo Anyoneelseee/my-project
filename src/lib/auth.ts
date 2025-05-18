@@ -1,9 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY!
-);
+// src/lib/auth.ts
+import { supabase } from "./supabase";
 
 export const getUserRole = async () => {
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -16,6 +12,6 @@ export const getUserRole = async () => {
     .maybeSingle();
 
   if (profileError) return null;
-  
+
   return profile?.role ?? null;
 };

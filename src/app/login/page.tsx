@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         setError(error.message);
@@ -29,7 +29,25 @@ export default function LoginPage() {
         return;
       }
 
-      console.log("Login successful!");
+      console.log("Login successful, session:", data.session);
+
+      // Explicitly set session
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        // Store session in global for API requests
+        window.__supabaseSession = {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          expires_at: data.session.expires_at ?? undefined,
+        };
+        console.log("Set window.__supabaseSession:", window.__supabaseSession);
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log("Current session:", sessionData);
 
       const role = await getUserRole();
 
@@ -70,6 +88,7 @@ export default function LoginPage() {
               width={24}
               height={24}
               className="rounded-md"
+              priority // Add priority for LCP
             />
             Carma
           </Link>
@@ -94,6 +113,7 @@ export default function LoginPage() {
           className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
           width={300}
           height={300}
+          priority // Add priority for LCP
         />
       </div>
     </div>

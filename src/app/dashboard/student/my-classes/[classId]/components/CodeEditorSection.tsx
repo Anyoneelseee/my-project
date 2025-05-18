@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import AceEditor from "react-ace";
@@ -8,13 +8,15 @@ import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/mode-python";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-monokai";
-import "ace-builds/src-noconflict/worker-javascript";
+import "ace-builds/src-noconflict/ext-language_tools"; // Add language tools
 
 export default function CodeEditorSection({ classId }: { classId: string }) {
   const [code, setCode] = useState<string>("// Write your code here\nconsole.log('Hello, World!');");
   const [output, setOutput] = useState<string>("");
   const [language, setLanguage] = useState<string>("javascript");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
   const handleRunCode = () => {
     if (language !== "javascript") {
@@ -59,48 +61,50 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setCode(e.target?.result as string);
+      };
+      reader.readAsText(file);
     }
   };
 
-  const handleSubmitActivity = async () => {
-    if (!selectedFile) {
-      alert("Please select a file to submit.");
-      return;
-    }
+  async function handleSubmitActivity() {
     try {
-      const fileContent = await selectedFile.text();
-      const fileLanguage =
-        selectedFile.name.split(".").pop()?.toLowerCase() === "js"
-          ? "javascript"
-          : selectedFile.name.split(".").pop()?.toLowerCase() === "py"
-          ? "python"
-          : "c_cpp";
+      setIsSubmitting(true);
+      const code = editorRef.current?.editor.getValue() ?? "";
+      const fileExtension = language === "python" ? "py" : language === "cpp" ? "cpp" : "js";
+      const token = window.__supabaseSession?.access_token || "";
+      console.log("Submitting with token:", token); // Debug token
 
-      console.log("Submitting to API:", { classId, language: fileLanguage, codeLength: fileContent.length });
-
-      const response = await fetch("/api/submit-code", {
+      const response = await fetch("/api/studentsubmit_code", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({
-          code: fileContent,
+          code,
           classId,
-          language: fileLanguage,
+          language: fileExtension,
+          fileName: selectedFile?.name,
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || "Failed to submit activity");
+        throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
       }
 
       alert(data.message);
-      console.log("Submitted fileName:", data.fileName);
       setSelectedFile(null);
     } catch (error) {
-      console.error("Submit error:", error);
-      alert(error instanceof Error ? `Failed to submit activity: ${error.message}` : "Failed to submit activity: Unknown error");
+      console.error("Submission error:", error);
+      alert(error instanceof Error ? error.message : "Failed to submit activity");
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }
 
   return (
     <Card className="mb-4">
@@ -141,6 +145,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   wrap: true,
                 }}
                 style={{ width: "100%", height: "400px" }}
+                ref={editorRef}
               />
             </div>
             <div>
@@ -152,9 +157,15 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           </div>
           <div className="space-y-4">
             <div className="flex gap-2">
-              <Button onClick={handleRunCode}>Run Code</Button>
-              <Button onClick={handleSaveCode}>Save Code</Button>
-              <Button onClick={handleSubmitActivity}>Submit Activity</Button>
+              <Button onClick={handleRunCode} disabled={isSubmitting}>
+                Run Code
+              </Button>
+              <Button onClick={handleSaveCode} disabled={isSubmitting}>
+                Save Code
+              </Button>
+              <Button onClick={handleSubmitActivity} disabled={isSubmitting}>
+                Submit Activity
+              </Button>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -162,6 +173,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 onChange={handleFileChange}
                 className="p-2 border rounded w-full"
                 accept=".js,.py,.cpp"
+                disabled={isSubmitting}
               />
             </div>
           </div>

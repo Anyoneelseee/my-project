@@ -1,40 +1,87 @@
-import { BlobServiceClient } from "@azure/storage-blob";
-import { NextRequest, NextResponse } from "next/server";
+// src/app/api/studentsubmit_code/route.ts
+import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { code, classId, language } = await req.json();
-    console.log("Request body:", { codeLength: code.length, classId, language });
+    const supabase = await createSupabaseServerClient();
+    const { code, classId, language, fileName } = await request.json();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log("User data:", user);
 
-    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-    console.log("Connection string:", connectionString ? "Set" : "Not set");
-
-    if (!connectionString) {
-      console.error("Azure configuration missing");
-      return NextResponse.json({ error: "Azure configuration missing" }, { status: 500 });
+    if (userError || !user) {
+      console.error("Auth error details:", userError?.message || "No user found");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const containerName = "student-submissions";
-    const extension = language === "javascript" ? "js" : language === "python" ? "py" : "cpp";
-    const fileName = `submissions/${classId}/${Date.now()}-${language}.${extension}`;
-    console.log("Generated fileName:", fileName);
+    // Validate class
+    const { data: classData, error: classError } = await supabase
+      .from("classes")
+      .select("section")
+      .eq("id", classId)
+      .single();
+    if (classError || !classData) return NextResponse.json({ error: "Class not found" }, { status: 404 });
 
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    const containerClient = blobServiceClient.getContainerClient(containerName);
-    console.log("Attempting to create container if not exists:", containerName);
-    await containerClient.createIfNotExists();
-    console.log("Container ready");
+    // Generate file name and path
+    const finalFileName = fileName || `code-${Date.now()}.${language}`;
+    const filePath = `submissions/${classData.section}/${user.id}/${finalFileName}`;
 
-    const blockBlobClient = containerClient.getBlockBlobClient(fileName);
-    console.log("Uploading to Azure:", fileName);
-    await blockBlobClient.uploadData(Buffer.from(code));
-    console.log("Upload complete");
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from("submissions")
+      .upload(filePath, Buffer.from(code), {
+        contentType: "text/plain",
+      });
 
-    return NextResponse.json({ message: "Code submitted successfully", fileName }, { status: 200 });
+    if (uploadError) {
+      console.error("Upload error:", uploadError);
+      return NextResponse.json({ error: `Failed to upload file: ${uploadError.message}` }, { status: 500 });
+    }
+
+    // Store metadata in database
+    const { data: submission, error: insertError } = await supabase
+      .from("submissions")
+      .insert({
+        class_id: classId,
+        student_id: user.id,
+        file_name: finalFileName,
+        file_path: filePath,
+        language,
+        submitted_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Insert error:", insertError);
+      return NextResponse.json({ error: `Failed to save submission: ${insertError.message}` }, { status: 500 });
+    }
+
+    // Placeholder for AI detection
+    try {
+      const aiResponse = await fetch("https://ai-detection-api.com/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language }),
+      });
+      if (!aiResponse.ok) throw new Error("AI detection failed");
+      const { isAiGenerated, confidence } = await aiResponse.json();
+
+      await supabase.from("submission_analysis").insert({
+        submission_id: submission.id,
+        is_ai_generated: isAiGenerated,
+        confidence_score: confidence,
+      });
+    } catch (aiError) {
+      console.error("AI detection error:", aiError);
+      // Continue even if AI detection fails
+    }
+
+    return NextResponse.json({ message: "File submitted successfully", fileName: finalFileName });
   } catch (error) {
-    console.error("Submit API error:", error);
+    console.error("Submit error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "An unknown error occurred" },
+      { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
