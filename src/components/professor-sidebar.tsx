@@ -1,9 +1,9 @@
-// src/components/professor-sidebar.tsx
 "use client";
 
 import * as React from "react";
 import {
   AudioWaveform,
+  BarChart2,
   Command,
   GalleryVerticalEnd,
   SquareTerminal,
@@ -21,7 +21,6 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-// Interface for a class
 interface Class {
   id: string;
   name: string;
@@ -34,6 +33,10 @@ export function ProfessorSidebar({
   classes = [],
   ...props
 }: React.ComponentProps<typeof Sidebar> & { classes?: Class[] }) {
+  React.useEffect(() => {
+    console.log("ProfessorSidebar classes:", classes);
+  }, [classes]);
+
   const data = {
     user: {
       name: "Professor Name",
@@ -66,11 +69,20 @@ export function ProfessorSidebar({
       },
       {
         title: "Created Classes",
-        url: "/dashboard/professor", // Points to the main dashboard
+        url: "/dashboard/professor",
         icon: PlusCircle,
-        items: classes.map((cls) => ({
+        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
           title: `${cls.name} (${cls.section})`,
-          url: `/dashboard/professor/${cls.id}`, // Updated to match the dynamic route
+          url: `/dashboard/professor/${cls.id}`,
+        })),
+      },
+      {
+        title: "Monitoring",
+        url: "/dashboard/professor/monitoring",
+        icon: BarChart2,
+        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
+          title: `${cls.name} (${cls.section})`,
+          url: `/dashboard/professor/monitoring/${cls.id}`,
         })),
       },
     ],

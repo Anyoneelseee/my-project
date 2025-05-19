@@ -21,33 +21,74 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
   const [section, setSection] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Log activity to Supabase with retry
+  const logActivity = async (action: string, retries = 2) => {
+    try {
+      console.log("Attempting to log activity:", { classId, action });
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session || !session.user) {
+        console.warn("No authenticated session:", sessionError?.message);
+        setError("Please log in to perform actions.");
+        return;
+      }
+
+      const userId = session.user.id;
+      console.log("User ID:", userId, "Class ID:", classId);
+
+      const { error: insertError } = await supabase
+        .from("activity_logs")
+        .insert({
+          class_id: classId,
+          student_id: userId,
+          action,
+        });
+
+      if (insertError) {
+        console.warn("Failed to insert log:", insertError.message, insertError.details);
+        if (retries > 0) {
+          console.log("Retrying log insert:", { action, retries });
+          setTimeout(() => logActivity(action, retries - 1), 1000);
+        } else {
+          setError("Failed to log activity. Ensure you are authorized for this class.");
+        }
+      } else {
+        console.log("Successfully logged activity:", { classId, userId, action });
+      }
+    } catch (err) {
+      console.error("Unexpected error logging activity:", err);
+      setError("An unexpected error occurred.");
+    }
+  };
+
+  // Test logging on mount
+  useEffect(() => {
+    console.log("CodeEditorSection mounted with classId:", classId);
+    logActivity("Component Mounted");
+  }, [classId]);
 
   useEffect(() => {
     async function fetchSectionAndSubmissions() {
       try {
         console.log("Fetching for classId:", classId);
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log("Client session:", session ? "Found" : "Not found", "Session Error:", sessionError?.message);
         if (sessionError || !session) {
           console.error("No session for submissions:", sessionError?.message);
           setError("Please log in to view submissions.");
           return;
         }
 
-        // Define type for section query result
         type SectionResult = {
           section: string | null;
           error_message: string | null;
         };
 
-        // Fetch section using RPC
         const { data: sectionData, error: sectionError } = await supabase
           .rpc("get_student_class_section", {
             class_id_input: classId,
             student_id_input: session.user.id,
           });
-
-        console.log("Section RPC result:", sectionData, "Error:", sectionError, "User ID:", session.user.id);
 
         if (sectionError) {
           console.error("Section fetch error:", sectionError.message);
@@ -55,12 +96,9 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           return;
         }
 
-        // Handle array response
         const result: SectionResult = Array.isArray(sectionData) && sectionData.length > 0
           ? sectionData[0]
           : { section: null, error_message: "No data returned" };
-
-        console.log("Parsed result:", result);
 
         if (!result.section || result.error_message) {
           console.error("No section found for class:", classId, "Error:", result.error_message);
@@ -73,8 +111,6 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
         console.log("Section set to:", sectionName);
 
         const folderPath = `submissions/${sectionName}/${session.user.id}`;
-        console.log("Fetching submissions from:", folderPath, "User ID:", session.user.id, "Section:", sectionName);
-
         const { data, error } = await supabase.storage
           .from("submissions")
           .list(folderPath, {
@@ -84,12 +120,11 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           });
 
         if (error) {
-          console.error("Failed to fetch submissions:", error.message, "Path:", folderPath);
+          console.error("Failed to fetch submissions:", error.message);
           setError("Failed to load submissions.");
           return;
         }
 
-        console.log("Submissions fetched:", data, "Path:", folderPath);
         setSubmissions(data.map((file) => file.name));
       } catch (err) {
         console.error("Error listing submissions:", err);
@@ -102,7 +137,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
 
   const handleRunCode = () => {
     if (language !== "javascript") {
-      setOutput("Execution is currently supported only for JavaScript. For Python and C/C++, a backend server is required.");
+      setOutput("Execution is currently supported only for JavaScript.");
       return;
     }
     try {
@@ -114,6 +149,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       eval(code);
       console.log = originalConsoleLog;
       setOutput(outputLog || "No output");
+      logActivity("Ran Code");
     } catch (error: unknown) {
       setOutput(error instanceof Error ? `Error: ${error.message}` : "An unknown error occurred.");
     }
@@ -137,6 +173,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     alert(`Code saved as ${finalFileName}`);
+    logActivity("Saved Code");
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,6 +185,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
         setCode(e.target?.result as string);
       };
       reader.readAsText(file);
+      logActivity("Uploaded File");
     }
   };
 
@@ -157,7 +195,6 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       const code = editorRef.current?.editor.getValue() ?? "";
       const fileExtension = language === "python" ? "py" : language === "cpp" ? "cpp" : "js";
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log("Submitting with session:", session ? "Found" : "Not found", "Session Error:", sessionError?.message);
       if (sessionError || !session) {
         throw new Error("No session available");
       }
@@ -165,8 +202,6 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       if (!section) {
         throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
       }
-
-      console.log("Submitting with user ID:", session.user.id, "Class ID:", classId, "Section:", section);
 
       const response = await fetch("/api/studentsubmit_code", {
         method: "POST",
@@ -183,24 +218,21 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       });
 
       const data = await response.json();
-      console.log("Submission response:", data, "Status:", response.status);
       if (!response.ok) {
-        console.error("Submission failed:", data.error, response.statusText);
         throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
       }
 
       alert(data.message);
       setSelectedFile(null);
+      logActivity("Submitted Activity");
 
-      // Refresh submissions list
       const folderPath = `submissions/${section}/${session.user.id}`;
       const { data: updatedFiles, error: listError } = await supabase.storage
         .from("submissions")
         .list(folderPath);
       if (listError) {
-        console.error("Failed to refresh submissions:", listError.message, "Path:", folderPath);
+        console.error("Failed to refresh submissions:", listError.message);
       } else {
-        console.log("Refreshed submissions:", updatedFiles, "Path:", folderPath);
         setSubmissions(updatedFiles.map((file) => file.name));
       }
     } catch (error) {
@@ -210,6 +242,18 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       setIsSubmitting(false);
     }
   }
+
+  const handleCodeChange = (newCode: string) => {
+    setCode(newCode);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      if (newCode.trim()) {
+        logActivity("Started Typing");
+      }
+    }, 5000);
+  };
 
   return (
     <Card className="mb-4">
@@ -240,7 +284,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 mode={language}
                 theme="monokai"
                 value={code}
-                onChange={setCode}
+                onChange={handleCodeChange}
                 name="code-editor"
                 editorProps={{ $blockScrolling: true }}
                 setOptions={{
@@ -273,6 +317,9 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
               </Button>
               <Button onClick={handleSubmitActivity} disabled={isSubmitting || !section}>
                 Submit Activity
+              </Button>
+              <Button onClick={() => logActivity("Test Button")}>
+                Test Log
               </Button>
             </div>
             <div className="flex items-center gap-2">

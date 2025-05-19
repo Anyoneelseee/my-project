@@ -101,6 +101,7 @@ export default function ProfessorDashboard() {
                   typeof cls.course === "string" &&
                   typeof cls.code === "string"
               );
+              console.log("Validated classes:", validatedClasses);
               setClasses(validatedClasses);
             }
           } catch (err) {
@@ -172,6 +173,7 @@ export default function ProfessorDashboard() {
             typeof cls.course === "string" &&
             typeof cls.code === "string"
         );
+        console.log("Updated classes:", validatedClasses);
         setClasses(validatedClasses);
       }
 
