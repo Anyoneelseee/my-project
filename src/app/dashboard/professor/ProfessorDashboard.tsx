@@ -8,10 +8,8 @@ import { ProfessorSidebar } from "@/components/professor-sidebar";
 import {
   Breadcrumb,
   BreadcrumbItem,
-  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
-  BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -25,7 +23,6 @@ import { ClassCodeDialog } from "./ClassCodeDialog";
 import { ClassCard } from "./ClassCard";
 import Link from "next/link";
 
-// Interface for a class
 interface Class {
   id: string;
   name: string;
@@ -46,66 +43,76 @@ export default function ProfessorDashboard() {
     const initialize = async () => {
       setIsLoading(true);
       try {
-        // Wait for Supabase to restore session
-        await new Promise((resolve) => {
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-              resolve(session);
-            }
-          });
-          return () => subscription.unsubscribe();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+          if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+            subscription.unsubscribe();
+            proceedWithSession();
+          }
         });
 
-        // Check for existing session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session) {
-          console.error("No session found:", sessionError?.message);
-          redirect("/login");
-          return;
-        }
+        const proceedWithSession = async () => {
+          try {
+            let session = null;
+            let sessionError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const result = await supabase.auth.getSession();
+              session = result.data.session;
+              sessionError = result.error;
+              if (session) break;
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
 
-        // Verify user
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-          console.error("Auth error:", authError?.message);
-          redirect("/login");
-          return;
-        }
+            if (sessionError || !session) {
+              console.warn("No session found after retries:", sessionError?.message);
+              redirect("/login");
+              return;
+            }
 
-        // Check user role
-        const role = await getUserRole();
-        if (!role) {
-          redirect("/login");
-          return;
-        }
-        if (role !== "professor") {
-          redirect("/dashboard/student");
-          return;
-        }
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+              console.warn("Auth error:", authError?.message);
+              redirect("/login");
+              return;
+            }
 
-        // Fetch classes using RPC
-        const { data, error } = await supabase
-          .rpc("get_professor_classes");
+            const role = await getUserRole();
+            if (!role) {
+              console.warn("No user role found");
+              redirect("/login");
+              return;
+            }
+            if (role !== "professor") {
+              redirect("/dashboard/student");
+              return;
+            }
 
-        if (error) {
-          console.error("Error fetching classes:", error.message, error.details, error.hint);
-          setClasses([]);
-        } else {
-          const validatedClasses = (data as Class[]).filter(
-            (cls): cls is Class =>
-              cls &&
-              typeof cls.id === "string" &&
-              typeof cls.name === "string" &&
-              typeof cls.section === "string" &&
-              typeof cls.course === "string" &&
-              typeof cls.code === "string"
-          );
-          setClasses(validatedClasses);
-        }
+            const { data, error } = await supabase.rpc("get_professor_classes");
+
+            if (error) {
+              console.warn("Failed to fetch classes:", error.message);
+              setClasses([]);
+            } else {
+              const validatedClasses = (data as Class[]).filter(
+                (cls): cls is Class =>
+                  cls &&
+                  typeof cls.id === "string" &&
+                  typeof cls.name === "string" &&
+                  typeof cls.section === "string" &&
+                  typeof cls.course === "string" &&
+                  typeof cls.code === "string"
+              );
+              setClasses(validatedClasses);
+            }
+          } catch (err) {
+            console.error("Unexpected error in session handling:", err);
+            redirect("/login");
+          } finally {
+            setIsLoading(false);
+          }
+        };
       } catch (err) {
         console.error("Unexpected error:", err);
         setClasses([]);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -120,22 +127,20 @@ export default function ProfessorDashboard() {
     }
 
     try {
-      // Ensure session is valid
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
-        console.error("No session in create class:", sessionError?.message);
+        console.warn("No session in create class:", sessionError?.message);
         redirect("/login");
         return;
       }
 
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
-        console.error("Auth error in create class:", authError?.message);
+        console.warn("Auth error in create class:", authError?.message);
         redirect("/login");
         return;
       }
 
-      // Generate a unique class code
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
       const newClassData = {
         name: newClass.name,
@@ -145,22 +150,18 @@ export default function ProfessorDashboard() {
         professor_id: user.id,
       };
 
-      const { error } = await supabase
-        .from("classes")
-        .insert([newClassData]);
+      const { error } = await supabase.from("classes").insert([newClassData]);
 
       if (error) {
-        console.error("Error creating class:", error.message, error.details, error.hint);
+        console.warn("Failed to create class:", error.message);
         alert("Failed to create class. Please try again.");
         return;
       }
 
-      // Fetch updated classes
-      const { data, error: fetchError } = await supabase
-        .rpc("get_professor_classes");
+      const { data, error: fetchError } = await supabase.rpc("get_professor_classes");
 
       if (fetchError) {
-        console.error("Error fetching updated classes:", fetchError.message, fetchError.details, fetchError.hint);
+        console.warn("Failed to fetch updated classes:", fetchError.message);
       } else {
         const validatedClasses = (data as Class[]).filter(
           (cls): cls is Class =>
@@ -185,38 +186,26 @@ export default function ProfessorDashboard() {
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>;
   }
 
   return (
     <SidebarProvider>
       <ProfessorSidebar classes={classes} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard/professor">
-                    Professor Dashboard
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Home</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
+          <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbPage className="text-gray-900 text-sm font-medium">Home</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            {/* Create Class Card */}
             <Card className="flex flex-col justify-between p-6 border-dashed border-2 border-gray-300 h-[200px]">
               <CardHeader className="flex flex-col items-center justify-center text-center pt-4 md:pt-6 lg:pt-8">
                 <CardTitle className="text-lg md:text-xl lg:text-2xl xl:text-3xl">
@@ -233,8 +222,6 @@ export default function ProfessorDashboard() {
                 />
               </CardContent>
             </Card>
-
-            {/* Display Existing Classes */}
             {classes.map((classData) => (
               <Link href={`/dashboard/professor/${classData.id}`} key={classData.id}>
                 <ClassCard classData={classData} />
@@ -243,8 +230,6 @@ export default function ProfessorDashboard() {
           </div>
           <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
         </div>
-
-        {/* Class Code Dialog */}
         <ClassCodeDialog
           isOpen={isCodeDialogOpen}
           onOpenChange={setIsCodeDialogOpen}
