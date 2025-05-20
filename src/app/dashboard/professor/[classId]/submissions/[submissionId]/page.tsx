@@ -46,6 +46,8 @@ export default function SubmissionViewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [studentName, setStudentName] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
+  const [aiPercentage, setAiPercentage] = useState<number | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
   useEffect(() => {
@@ -124,6 +126,55 @@ export default function SubmissionViewPage() {
 
             const text = await fileData.text();
             setCode(text);
+
+            // Check if AI percentage already exists in the database
+            const { data: submissionData, error: submissionError } = await supabase
+              .from("submissions")
+              .select("ai_percentage")
+              .eq("class_id", classId)
+              .eq("student_id", studentId)
+              .eq("file_name", fileName)
+              .single();
+
+            if (submissionError) {
+              console.warn("Failed to fetch submission data:", submissionError.message);
+            }
+
+            if (submissionData && submissionData.ai_percentage !== null) {
+              setAiPercentage(submissionData.ai_percentage);
+            } else {
+              // Call AI detection API
+              try {
+                const response = await fetch("http://localhost:8000/detect", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ code: text }),
+                });
+
+                if (!response.ok) {
+                  throw new Error(`AI detection failed: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                const percentage = result.ai_percentage || 0;
+                setAiPercentage(percentage);
+
+                // Save the AI percentage to the database
+                const { error: updateError } = await supabase
+                  .from("submissions")
+                  .update({ ai_percentage: percentage })
+                  .eq("class_id", classId)
+                  .eq("student_id", studentId)
+                  .eq("file_name", fileName);
+
+                if (updateError) {
+                  console.warn("Failed to save AI percentage:", updateError.message);
+                }
+              } catch (err) {
+                console.warn("AI detection error:", err);
+                setAiError("Failed to run AI detection.");
+              }
+            }
 
           } catch (err) {
             console.error("Unexpected error:", err);
@@ -278,14 +329,22 @@ export default function SubmissionViewPage() {
                     </Card>
                   </div>
 
-                  {/* AI Detector Placeholder */}
+                  {/* AI Detector */}
                   <Card className="border border-gray-200 rounded-lg shadow-sm w-full">
                     <CardHeader>
                       <CardTitle className="text-lg font-semibold text-gray-900">AI Detector</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-center h-[200px] text-gray-500">
-                        <p>AI Detection Results (Coming Soon)</p>
+                        {aiError ? (
+                          <p className="text-red-500">{aiError}</p>
+                        ) : aiPercentage !== null ? (
+                          <p className="text-lg font-semibold text-gray-900">
+                            AI-Generated Percentage: {aiPercentage.toFixed(2)}%
+                          </p>
+                        ) : (
+                          <p>Loading AI detection...</p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
