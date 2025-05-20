@@ -41,7 +41,17 @@ export default function SignupFormDemo() {
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // Sign up with user_metadata
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+        },
+      },
+    });
 
     if (error) {
       setError(error.message);
@@ -50,27 +60,11 @@ export default function SignupFormDemo() {
     }
 
     if (!data.user) {
-      setError("Signup failed. Please check your email verification.");
+      setError("Signup failed. Please try again.");
       setLoading(false);
       return;
     }
 
-    const { error: insertError } = await supabase.from("users").insert([
-      {
-        id: data.user.id,
-        first_name: firstName,
-        last_name: lastName,
-        role: null,
-      },
-    ]);
-
-    if (insertError) {
-      setError(insertError.message);
-      setLoading(false);
-      return;
-    }
-
-    setMessage("Signup successful! Check your email to confirm your account.");
     setShowDialog(true);
     setLoading(false);
   };
@@ -86,58 +80,58 @@ export default function SignupFormDemo() {
         <div className="mb-4 flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2">
           <LabelInputContainer>
             <Label htmlFor="firstname">First name</Label>
-            <Input 
-              id="firstname" 
-              placeholder="Tyler" 
-              type="text" 
-              value={firstName} 
-              onChange={(e) => setFirstName(e.target.value)} 
-              required 
+            <Input
+              id="firstname"
+              placeholder="Tyler"
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
             />
           </LabelInputContainer>
           <LabelInputContainer>
             <Label htmlFor="lastname">Last name</Label>
-            <Input 
-              id="lastname" 
-              placeholder="Durden" 
-              type="text" 
-              value={lastName} 
-              onChange={(e) => setLastName(e.target.value)} 
-              required 
+            <Input
+              id="lastname"
+              placeholder="Durden"
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
             />
           </LabelInputContainer>
         </div>
         <LabelInputContainer className="mb-4">
           <Label htmlFor="email">Email Address</Label>
-          <Input 
-            id="email" 
-            placeholder="projectmayhem@fc.com" 
-            type="email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            required 
+          <Input
+            id="email"
+            placeholder="projectmayhem@fc.com"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
           />
         </LabelInputContainer>
         <LabelInputContainer className="mb-4">
           <Label htmlFor="password">Password</Label>
-          <Input 
-            id="password" 
-            placeholder="••••••••" 
-            type="password" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            required 
+          <Input
+            id="password"
+            placeholder="••••••••"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
         </LabelInputContainer>
         <LabelInputContainer className="mb-8">
           <Label htmlFor="confirm-password">Confirm password</Label>
-          <Input 
-            id="confirm-password" 
-            placeholder="••••••••" 
-            type="password" 
-            value={confirmPassword} 
-            onChange={(e) => setConfirmPassword(e.target.value)} 
-            required 
+          <Input
+            id="confirm-password"
+            placeholder="••••••••"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
           />
         </LabelInputContainer>
 
@@ -159,9 +153,9 @@ export default function SignupFormDemo() {
 
         <div className="my-8 h-[1px] w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent dark:via-neutral-700" />
         <div className="flex flex-col space-y-4">
-          <button 
-            className="group/btn shadow-input relative flex h-10 w-full items-center justify-start space-x-2 rounded-md bg-gray-50 px-4 font-medium text-black dark:bg-zinc-900 dark:shadow-md" 
-            type="button" 
+          <button
+            className="group/btn shadow-input relative flex h-10 w-full items-center justify-start space-x-2 rounded-md bg-gray-50 px-4 font-medium text-black dark:bg-zinc-900 dark:shadow-md"
+            type="button"
             onClick={() => router.push("/login")}
           >
             <ArrowLeft className="h-4 w-4 text-neutral-800 dark:text-neutral-300" />
@@ -187,6 +181,6 @@ export default function SignupFormDemo() {
   );
 }
 
-const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string; }) => {
+const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => {
   return <div className={cn("flex w-full flex-col space-y-2", className)}>{children}</div>;
 };

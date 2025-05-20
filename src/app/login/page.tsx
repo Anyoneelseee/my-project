@@ -29,7 +29,12 @@ export default function LoginPage() {
 
       if (signInError) {
         console.error("Login error:", signInError.message);
-        setError(signInError.message);
+        // Customize error message for email confirmation
+        if (signInError.message === "Email not confirmed") {
+          setError("Please confirm your email address before logging in. Check your inbox for the confirmation link.");
+        } else {
+          setError(signInError.message);
+        }
         setLoading(false);
         return;
       }
@@ -62,33 +67,8 @@ export default function LoginPage() {
       // Fetch role
       const role = await getUserRole();
       if (!role) {
-        // Check if user exists in users table
-        const { data: existingUser, error: userError } = await supabase
-          .from("users")
-          .select("id, role")
-          .eq("id", user.id)
-          .single();
-
-        if (userError && userError.code !== "PGRST116") { // PGRST116: no rows found
-          console.error("Error fetching user profile:", userError.message, userError.details, userError.hint);
-          setError("Failed to verify user profile. Please try again.");
-          setLoading(false);
-          return;
-        }
-
-        if (!existingUser) {
-          // Insert new user profile
-          const { error: insertError } = await supabase
-            .from("users")
-            .insert([{ id: user.id, role: null }]);
-          if (insertError) {
-            console.error("Error inserting user profile:", insertError.message, insertError.details, insertError.hint);
-            setError("Failed to create user profile. Please try again.");
-            setLoading(false);
-            return;
-          }
-        }
-
+        // Since the signup trigger creates the users table row, assume it exists
+        // Redirect to choose-role if no role is set
         router.push("/choose-role");
       } else {
         router.push(`/dashboard/${role}`);

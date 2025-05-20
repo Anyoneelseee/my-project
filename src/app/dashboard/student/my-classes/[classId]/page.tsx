@@ -77,7 +77,7 @@ export default function JoinedClassPage() {
           .eq("id", classId);
 
         if (membershipError || !membershipData || membershipData.length === 0) {
-          console.error("Error verifying class membership:", membershipError?.message);
+          console.error("Error verifying class membership:", membershipError?.message, membershipError?.details, membershipError?.hint);
           router.push("/dashboard/student");
           return;
         }
@@ -91,7 +91,7 @@ export default function JoinedClassPage() {
           .rpc("get_student_activities", { class_id: classId });
 
         if (activitiesError) {
-          console.error("Error fetching activities:", activitiesError.message);
+          console.error("Error fetching activities:", activitiesError.message, activitiesError.details, activitiesError.hint);
           setActivities([]);
         } else {
           const validatedActivities = (activitiesData as Activity[]).filter(

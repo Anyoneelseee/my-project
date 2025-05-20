@@ -166,7 +166,7 @@ export default function StudentDashboard() {
       // Join the class
       const { error: joinError } = await supabase
         .from("class_members")
-        .insert([{ class_id: classData.id, student_id: user.id, section: classData.section }]);
+        .insert([{ class_id: classData.id, student_id: user.id }]);
 
       if (joinError) {
         if (joinError.code === "23505") {
