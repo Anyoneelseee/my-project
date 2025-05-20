@@ -1,18 +1,15 @@
-// src/components/student-sidebar.tsx
 "use client";
 
 import * as React from "react";
+import { useState, useEffect } from "react";
 import {
-  AudioWaveform,
   Command,
-  GalleryVerticalEnd,
   SquareTerminal,
   Users,
 } from "lucide-react";
-
+import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -36,25 +33,49 @@ interface StudentSidebarProps extends React.ComponentProps<typeof Sidebar> {
 }
 
 export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) {
+  const [user, setUser] = useState({
+    name: "Student Name",
+    email: "student@example.com",
+    avatar: "/avatars/student.jpg",
+  });
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          console.error("Failed to fetch user:", error?.message);
+          return;
+        }
+        // Fetch additional user details from the users table
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+        if (userError) {
+          console.warn("Failed to fetch user details:", userError.message);
+        }
+        setUser({
+          name: userData && userData.first_name && userData.last_name
+            ? `${userData.first_name} ${userData.last_name}`.trim()
+            : user.email?.split("@")[0] || "Student",
+          email: user.email || "student@example.com",
+          avatar: user.user_metadata?.avatar_url || "/avatars/student.jpg",
+        });
+      } catch (err) {
+        console.error("Unexpected error fetching user:", err);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
   const data = {
-    user: {
-      name: "Student Name",
-      email: "student@example.com",
-      avatar: "/avatars/student.jpg",
-    },
+    user,
     teams: [
       {
-        name: "Class A",
-        logo: GalleryVerticalEnd,
-        plan: "Student",
-      },
-      {
-        name: "Class B",
-        logo: AudioWaveform,
-        plan: "Student",
-      },
-      {
-        name: "Class C",
+        name: "Carma",
         logo: Command,
         plan: "Student",
       },
@@ -83,7 +104,6 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />

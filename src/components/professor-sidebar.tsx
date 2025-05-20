@@ -1,18 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { useState, useEffect } from "react";
 import {
-  AudioWaveform,
   BarChart2,
-  Command,
-  GalleryVerticalEnd,
   SquareTerminal,
   PlusCircle,
 } from "lucide-react";
-
+import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -33,33 +30,47 @@ export function ProfessorSidebar({
   classes = [],
   ...props
 }: React.ComponentProps<typeof Sidebar> & { classes?: Class[] }) {
-  React.useEffect(() => {
+  const [user, setUser] = useState({
+    name: "Professor Name",
+    email: "professor@example.com",
+    avatar: "/avatars/professor.jpg",
+  });
+
+  useEffect(() => {
     console.log("ProfessorSidebar classes:", classes);
+    const fetchUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          console.error("Failed to fetch user:", error?.message);
+          return;
+        }
+        // Fetch additional user details from the users table
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+        if (userError) {
+          console.warn("Failed to fetch user details:", userError.message);
+        }
+        setUser({
+          name: userData && userData.first_name && userData.last_name
+            ? `${userData.first_name} ${userData.last_name}`.trim()
+            : user.email?.split("@")[0] || "Professor",
+          email: user.email || "professor@example.com",
+          avatar: user.user_metadata?.avatar_url || "/avatars/professor.jpg",
+        });
+      } catch (err) {
+        console.error("Unexpected error fetching user:", err);
+      }
+    };
+
+    fetchUser();
   }, [classes]);
 
   const data = {
-    user: {
-      name: "Professor Name",
-      email: "professor@example.com",
-      avatar: "/avatars/professor.jpg",
-    },
-    teams: [
-      {
-        name: "Class X",
-        logo: GalleryVerticalEnd,
-        plan: "Professor",
-      },
-      {
-        name: "Class Y",
-        logo: AudioWaveform,
-        plan: "Professor",
-      },
-      {
-        name: "Class Z",
-        logo: Command,
-        plan: "Professor",
-      },
-    ],
+    user,
     navMain: [
       {
         title: "Playground",
@@ -91,7 +102,6 @@ export function ProfessorSidebar({
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
