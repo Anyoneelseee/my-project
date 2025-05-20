@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateActivityDialog } from "../CreateActivityDialog";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 
 interface Class {
   id: string;
@@ -147,37 +148,35 @@ export default function ClassDetailsPage() {
               setActivities(activitiesData || []);
             }
 
-            // Fetch submissions for each student
-           // Fetch submissions for each student
-const submissionPromises = (studentsData as Student[] || []).map(async (student: Student) => {
-  const { data: objectsData, error: objectsError } = await supabase.storage
-    .from("submissions")
-    .list(`submissions/${classData.section}/${student.student_id}`, {
-      limit: 100,
-      offset: 0,
-      sortBy: { column: "created_at", order: "desc" },
-    });
+            const submissionPromises = (studentsData as Student[] || []).map(async (student: Student) => {
+              const { data: objectsData, error: objectsError } = await supabase.storage
+                .from("submissions")
+                .list(`submissions/${classData.section}/${student.student_id}`, {
+                  limit: 100,
+                  offset: 0,
+                  sortBy: { column: "created_at", order: "desc" },
+                });
 
-  if (objectsError) {
-    console.warn(`Failed to fetch submissions for student ${student.student_id}:`, objectsError.message);
-    return [];
-  }
+              if (objectsError) {
+                console.warn(`Failed to fetch submissions for student ${student.student_id}:`, objectsError.message);
+                return [];
+              }
 
-  console.log(`Raw objects data for student ${student.student_id}:`, objectsData);
+              console.log(`Raw objects data for student ${student.student_id}:`, objectsData);
 
-  return objectsData
-    .filter((obj) => obj.name && obj.metadata) // Ensure it's a file with metadata
-    .map((obj) => {
-      const submission = {
-        student_id: student.student_id,
-        student_name: `${student.first_name} ${student.last_name}`.trim(),
-        file_name: obj.name,
-        submitted_at: obj.created_at || new Date().toISOString(),
-      };
-      console.log("Processed submission:", submission);
-      return submission;
-    });
-});
+              return objectsData
+                .filter((obj) => obj.name && obj.metadata)
+                .map((obj) => {
+                  const submission = {
+                    student_id: student.student_id,
+                    student_name: `${student.first_name} ${student.last_name}`.trim(),
+                    file_name: obj.name,
+                    submitted_at: obj.created_at || new Date().toISOString(),
+                  };
+                  console.log("Processed submission:", submission);
+                  return submission;
+                });
+            });
 
             const submissionsArrays = await Promise.all(submissionPromises);
             const submissions = submissionsArrays.flat();
@@ -336,18 +335,22 @@ const submissionPromises = (studentsData as Student[] || []).map(async (student:
                 ) : (
                   <div className="space-y-4">
                     {submissions.map((submission) => (
-                      <Card
+                      <Link
                         key={`${submission.student_id}-${submission.file_name}`}
-                        className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                        href={`/dashboard/professor/${classId}/submissions/${encodeURIComponent(`${submission.student_id}/${submission.file_name}`)}`}
                       >
-                        <CardContent className="p-4 space-y-1">
-                          <p className="font-semibold text-gray-900">{submission.student_name}</p>
-                          <p className="text-sm text-gray-500">File: {submission.file_name}</p>
-                          <p className="text-sm text-gray-500">
-                            Submitted: {new Date(submission.submitted_at).toLocaleString()}
-                          </p>
-                        </CardContent>
-                      </Card>
+                        <Card
+                          className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50 transition-shadow transition-colors cursor-pointer"
+                        >
+                          <CardContent className="p-4 space-y-1">
+                            <p className="font-semibold text-gray-900">{submission.student_name}</p>
+                            <p className="text-sm text-gray-500">File: {submission.file_name}</p>
+                            <p className="text-sm text-gray-500">
+                              Submitted: {new Date(submission.submitted_at).toLocaleString()}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </Link>
                     ))}
                   </div>
                 )}
