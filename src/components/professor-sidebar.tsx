@@ -6,6 +6,7 @@ import {
   BarChart2,
   SquareTerminal,
   PlusCircle,
+  LineChart, // Added for Analytics icon
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
@@ -94,6 +95,15 @@ export function ProfessorSidebar({
         items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
           title: `${cls.name} (${cls.section})`,
           url: `/dashboard/professor/monitoring/${cls.id}`,
+        })),
+      },
+      {
+        title: "Analytics",
+        url: "/dashboard/professor/analytics",
+        icon: LineChart,
+        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
+          title: `${cls.name} (${cls.section})`,
+          url: `/dashboard/professor/analytics/${cls.id}`,
         })),
       },
     ],

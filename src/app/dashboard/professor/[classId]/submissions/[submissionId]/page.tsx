@@ -26,13 +26,39 @@ import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+// Define the Class interface
 interface Class {
   id: string;
   name: string;
   section: string;
   course: string;
   code: string;
+}
+
+// Define the Submission interface with required properties
+interface Submission {
+  student_id: string;
+  file_name: string;
+  code: string;
+  student_name: string;
+  similarity_percentage?: number;
+}
+
+// Define the StudentProfile type for RPC response
+interface StudentProfile {
+  student_id: string;
+  first_name: string;
+  last_name: string;
+}
+
+// Define the Supabase error type
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
 }
 
 export default function SubmissionViewPage() {
@@ -48,6 +74,8 @@ export default function SubmissionViewPage() {
   const [fileName, setFileName] = useState<string>("");
   const [aiPercentage, setAiPercentage] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [similarSubmissions, setSimilarSubmissions] = useState<Submission[]>([]);
+  const [similarityFilter, setSimilarityFilter] = useState<number>(10);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
   useEffect(() => {
@@ -102,7 +130,7 @@ export default function SubmissionViewPage() {
 
             const { data: studentData, error: studentError } = await supabase
               .rpc("get_class_student_profiles", { class_id_input: classId })
-              .eq("student_id", studentId);
+              .eq("student_id", studentId) as { data: StudentProfile[], error: SupabaseError | null };
 
             if (studentError || !studentData || studentData.length === 0) {
               console.warn("Failed to fetch student:", studentError?.message);
@@ -127,7 +155,7 @@ export default function SubmissionViewPage() {
             const text = await fileData.text();
             setCode(text);
 
-            // Check if AI percentage already exists in the database
+            // Check if AI percentage already exists
             const { data: submissionData, error: submissionError } = await supabase
               .from("submissions")
               .select("ai_percentage")
@@ -143,9 +171,8 @@ export default function SubmissionViewPage() {
             if (submissionData && submissionData.ai_percentage !== null) {
               setAiPercentage(submissionData.ai_percentage);
             } else {
-              // Call AI detection API
               try {
-                const response = await fetch("http://localhost:8000/detect", {
+                const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL || "http://localhost:8000/detect", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ code: text }),
@@ -159,7 +186,6 @@ export default function SubmissionViewPage() {
                 const percentage = result.ai_percentage || 0;
                 setAiPercentage(percentage);
 
-                // Save the AI percentage to the database
                 const { error: updateError } = await supabase
                   .from("submissions")
                   .update({ ai_percentage: percentage })
@@ -176,6 +202,57 @@ export default function SubmissionViewPage() {
               }
             }
 
+            // Fetch all submissions for similarity detection
+            const { data: allSubmissions, error: fetchError } = await supabase
+              .from("submissions")
+              .select("student_id, file_name, file_path")
+              .eq("class_id", classId);
+
+            if (fetchError) {
+              console.warn("Failed to fetch submissions for similarity:", fetchError.message);
+              return;
+            }
+
+            const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
+              const { data: fileData, error: downloadError } = await supabase.storage
+                .from("submissions")
+                .download(sub.file_path);
+              if (downloadError) {
+                console.warn("Failed to download submission file:", downloadError.message);
+                return null;
+              }
+              const codeText = await fileData.text();
+              const { data: studentData, error: studentError } = await supabase
+                .rpc("get_class_student_profiles", { class_id_input: classId })
+                .eq("student_id", sub.student_id) as { data: StudentProfile[], error: SupabaseError | null };
+              if (studentError || !studentData || studentData.length === 0) {
+                console.warn("Failed to fetch student for submission:", studentError?.message);
+                return null;
+              }
+              const student = studentData[0];
+              return {
+                student_id: sub.student_id,
+                file_name: sub.file_name,
+                code: codeText,
+                student_name: `${student.first_name} ${student.last_name}`.trim(),
+              } as Submission;
+            });
+
+            const submissionsWithCode = (await Promise.all(submissionsWithCodePromises))
+              .filter((sub): sub is Submission => sub !== null);
+
+            // Precompute similarity (simplified Levenshtein distance for demo)
+            const currentCode = text;
+            const similar = submissionsWithCode
+              .filter(sub => sub.student_id !== studentId) // Exclude self
+              .map(sub => ({
+                ...sub,
+                similarity_percentage: computeSimilarity(currentCode, sub.code) * 100,
+              }))
+              .filter(sub => sub.similarity_percentage! >= similarityFilter);
+
+            setSimilarSubmissions(similar);
+
           } catch (err) {
             console.error("Unexpected error:", err);
             router.push("/dashboard/professor");
@@ -190,7 +267,7 @@ export default function SubmissionViewPage() {
     };
 
     initialize();
-  }, [classId, submissionId, router]);
+  }, [classId, submissionId, router, similarityFilter]);
 
   const handleRunCode = () => {
     if (!code.trim()) {
@@ -216,6 +293,31 @@ export default function SubmissionViewPage() {
     } finally {
       setIsRunning(false);
     }
+  };
+
+  // Simplified similarity computation (replace with API call in production)
+  const computeSimilarity = (code1: string, code2: string): number => {
+    const maxLength = Math.max(code1.length, code2.length);
+    if (maxLength === 0) return 1;
+    const dist = computeLevenshteinDistance(code1, code2);
+    return 1 - (dist / maxLength);
+  };
+
+  const computeLevenshteinDistance = (s1: string, s2: string): number => {
+    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(0));
+    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
+    for (let j = 1; j <= s2.length; j++) {
+      for (let i = 1; i <= s1.length; i++) {
+        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1, // deletion
+          matrix[j - 1][i] + 1, // insertion
+          matrix[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+    return matrix[s2.length][s1.length];
   };
 
   if (isLoading) {
@@ -344,6 +446,86 @@ export default function SubmissionViewPage() {
                           </p>
                         ) : (
                           <p>Loading AI detection...</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Code Similarity */}
+                  <Card className="border border-gray-200 rounded-lg shadow-sm w-full">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-semibold text-gray-900">Code Similarity</CardTitle>
+                      <div className="mt-2">
+                        <Label>Filter by Similarity (%)</Label>
+                        <Select value={similarityFilter.toString()} onValueChange={(value) => setSimilarityFilter(parseInt(value))}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Select similarity threshold" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="10">10%</SelectItem>
+                            <SelectItem value="20">20%</SelectItem>
+                            <SelectItem value="30">30%</SelectItem>
+                            <SelectItem value="40">40%</SelectItem>
+                            <SelectItem value="50">50%</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {similarSubmissions.length === 0 ? (
+                          <p className="text-gray-500 text-center">No similar submissions found.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <Card className="border border-gray-200 rounded-lg shadow-sm">
+                              <CardHeader>
+                                <CardTitle className="text-md font-semibold text-gray-900">Original Submission</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <AceEditor
+                                  mode="javascript"
+                                  theme="monokai"
+                                  value={code}
+                                  name="original-editor"
+                                  editorProps={{ $blockScrolling: true }}
+                                  setOptions={{
+                                    readOnly: true,
+                                    showLineNumbers: true,
+                                    tabSize: 2,
+                                    fontSize: 12,
+                                    wrap: true,
+                                  }}
+                                  style={{ width: "100%", height: "300px" }}
+                                />
+                              </CardContent>
+                            </Card>
+                            {similarSubmissions.map((sub, index) => (
+                              <Card key={index} className="border border-gray-200 rounded-lg shadow-sm">
+                                <CardHeader>
+                                  <CardTitle className="text-md font-semibold text-gray-900">
+                                    {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <AceEditor
+                                    mode="javascript"
+                                    theme="monokai"
+                                    value={sub.code}
+                                    name={`similar-editor-${index}`}
+                                    editorProps={{ $blockScrolling: true }}
+                                    setOptions={{
+                                      readOnly: true,
+                                      showLineNumbers: true,
+                                      tabSize: 2,
+                                      fontSize: 12,
+                                      wrap: true,
+                                    }}
+                                    style={{ width: "100%", height: "300px" }}
+                                  />
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
                         )}
                       </div>
                     </CardContent>
