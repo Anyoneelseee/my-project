@@ -28,7 +28,6 @@ import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Define the Class interface
 interface Class {
   id: string;
   name: string;
@@ -37,7 +36,6 @@ interface Class {
   code: string;
 }
 
-// Define the Submission interface with required properties
 interface Submission {
   student_id: string;
   file_name: string;
@@ -46,14 +44,12 @@ interface Submission {
   similarity_percentage?: number;
 }
 
-// Define the StudentProfile type for RPC response
 interface StudentProfile {
   student_id: string;
   first_name: string;
   last_name: string;
 }
 
-// Define the Supabase error type
 interface SupabaseError {
   message: string;
   details?: string;
@@ -128,9 +124,9 @@ export default function SubmissionViewPage() {
             const [studentId, fileName] = decodeURIComponent(submissionId as string).split("/");
             setFileName(fileName);
 
-            const { data: studentData, error: studentError } = await supabase
+            const { data: studentData, error: studentError } = (await supabase
               .rpc("get_class_student_profiles", { class_id_input: classId })
-              .eq("student_id", studentId) as { data: StudentProfile[], error: SupabaseError | null };
+              .eq("student_id", studentId)) as { data: StudentProfile[]; error: SupabaseError | null };
 
             if (studentError || !studentData || studentData.length === 0) {
               console.warn("Failed to fetch student:", studentError?.message);
@@ -172,7 +168,10 @@ export default function SubmissionViewPage() {
               setAiPercentage(submissionData.ai_percentage);
             } else {
               try {
-                const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL || "http://localhost:8000/detect", {
+                if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
+                  throw new Error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
+                }
+                const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ code: text }),
@@ -222,9 +221,9 @@ export default function SubmissionViewPage() {
                 return null;
               }
               const codeText = await fileData.text();
-              const { data: studentData, error: studentError } = await supabase
+              const { data: studentData, error: studentError } = (await supabase
                 .rpc("get_class_student_profiles", { class_id_input: classId })
-                .eq("student_id", sub.student_id) as { data: StudentProfile[], error: SupabaseError | null };
+                .eq("student_id", sub.student_id)) as { data: StudentProfile[]; error: SupabaseError | null };
               if (studentError || !studentData || studentData.length === 0) {
                 console.warn("Failed to fetch student for submission:", studentError?.message);
                 return null;
@@ -238,21 +237,49 @@ export default function SubmissionViewPage() {
               } as Submission;
             });
 
-            const submissionsWithCode = (await Promise.all(submissionsWithCodePromises))
-              .filter((sub): sub is Submission => sub !== null);
+            const submissionsWithCode = (await Promise.all(submissionsWithCodePromises)).filter(
+              (sub): sub is Submission => sub !== null
+            );
 
-            // Precompute similarity (simplified Levenshtein distance for demo)
-            const currentCode = text;
-            const similar = submissionsWithCode
-              .filter(sub => sub.student_id !== studentId) // Exclude self
-              .map(sub => ({
-                ...sub,
-                similarity_percentage: computeSimilarity(currentCode, sub.code) * 100,
-              }))
-              .filter(sub => sub.similarity_percentage! >= similarityFilter);
-
-            setSimilarSubmissions(similar);
-
+            // Use backend for similarity detection
+            const codes = submissionsWithCode.map((sub) => sub.code);
+            try {
+              if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
+                throw new Error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
+              }
+              const response = await fetch(
+                `${process.env.NEXT_PUBLIC_AI_DETECTOR_URL.replace("/detect", "")}/similarity`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ codes }),
+                }
+              );
+              if (!response.ok) {
+                throw new Error(`Similarity detection failed: ${response.statusText}`);
+              }
+              const result = await response.json();
+              const similarities = result.similarities || {};
+              const currentCodeIndex = submissionsWithCode.findIndex(
+                (sub) => sub.student_id === studentId && sub.file_name === fileName
+              );
+              const similar = submissionsWithCode
+                .filter((sub, idx) => idx !== currentCodeIndex) // Exclude self
+                .map((sub, idx) => {
+                  const similarityKey =
+                    currentCodeIndex < idx ? `${currentCodeIndex}-${idx}` : `${idx}-${currentCodeIndex}`;
+                  const similarityPercentage = similarities[similarityKey] || 0;
+                  return {
+                    ...sub,
+                    similarity_percentage: similarityPercentage,
+                  };
+                })
+                .filter((sub) => sub.similarity_percentage! >= similarityFilter);
+              setSimilarSubmissions(similar);
+            } catch (err) {
+              console.warn("Similarity detection error:", err);
+              setError((prev) => [...prev, "Failed to run similarity detection."]);
+            }
           } catch (err) {
             console.error("Unexpected error:", err);
             router.push("/dashboard/professor");
@@ -285,39 +312,18 @@ export default function SubmissionViewPage() {
       console.log = (message: string | number | boolean) => {
         outputLog += `${message}\n`;
       };
+      // eslint-disable-next-line no-eval
       eval(code);
       console.log = originalConsoleLog;
-      setOutput(outputLog ? outputLog.split("\n").filter(line => line) : ["No output"]);
+      setOutput(outputLog ? outputLog.split("\n").filter((line) => line) : ["No output"]);
     } catch (err) {
-      setError((prev) => [...prev, err instanceof Error ? err.message : "An unknown error occurred"]);
+      setError((prev) => [
+        ...prev,
+        err instanceof Error ? err.message : "An unknown error occurred",
+      ]);
     } finally {
       setIsRunning(false);
     }
-  };
-
-  // Simplified similarity computation (replace with API call in production)
-  const computeSimilarity = (code1: string, code2: string): number => {
-    const maxLength = Math.max(code1.length, code2.length);
-    if (maxLength === 0) return 1;
-    const dist = computeLevenshteinDistance(code1, code2);
-    return 1 - (dist / maxLength);
-  };
-
-  const computeLevenshteinDistance = (s1: string, s2: string): number => {
-    const matrix = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(0));
-    for (let i = 0; i <= s1.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= s2.length; j++) matrix[j][0] = j;
-    for (let j = 1; j <= s2.length; j++) {
-      for (let i = 1; i <= s1.length; i++) {
-        const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1, // deletion
-          matrix[j - 1][i] + 1, // insertion
-          matrix[j - 1][i - 1] + indicator // substitution
-        );
-      }
-    }
-    return matrix[s2.length][s1.length];
   };
 
   if (isLoading) {
@@ -330,7 +336,17 @@ export default function SubmissionViewPage() {
 
   return (
     <SidebarProvider>
-      <ProfessorSidebar classes={[{ id: classId as string, name: classData.name, section: classData.section, course: classData.course, code: classData.code }]} />
+      <ProfessorSidebar
+        classes={[
+          {
+            id: classId as string,
+            name: classData.name,
+            section: classData.section,
+            course: classData.course,
+            code: classData.code,
+          },
+        ]}
+      />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
           <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
@@ -338,13 +354,19 @@ export default function SubmissionViewPage() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors">
+                <BreadcrumbLink
+                  href="/dashboard/professor"
+                  className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors"
+                >
                   Home
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbLink href={`/dashboard/professor/${classId}`} className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors">
+                <BreadcrumbLink
+                  href={`/dashboard/professor/${classId}`}
+                  className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors"
+                >
                   {classData.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -424,7 +446,9 @@ export default function SubmissionViewPage() {
                             </div>
                           ))}
                           {error.map((line, index) => (
-                            <div key={`error-${index}`} className="text-red-400">{line}</div>
+                            <div key={`error-${index}`} className="text-red-400">
+                              {line}
+                            </div>
                           ))}
                         </div>
                       </CardContent>
@@ -457,7 +481,10 @@ export default function SubmissionViewPage() {
                       <CardTitle className="text-lg font-semibold text-gray-900">Code Similarity</CardTitle>
                       <div className="mt-2">
                         <Label>Filter by Similarity (%)</Label>
-                        <Select value={similarityFilter.toString()} onValueChange={(value) => setSimilarityFilter(parseInt(value))}>
+                        <Select
+                          value={similarityFilter.toString()}
+                          onValueChange={(value) => setSimilarityFilter(parseInt(value))}
+                        >
                           <SelectTrigger className="w-[180px]">
                             <SelectValue placeholder="Select similarity threshold" />
                           </SelectTrigger>
@@ -479,7 +506,9 @@ export default function SubmissionViewPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <Card className="border border-gray-200 rounded-lg shadow-sm">
                               <CardHeader>
-                                <CardTitle className="text-md font-semibold text-gray-900">Original Submission</CardTitle>
+                                <CardTitle className="text-md font-semibold text-gray-900">
+                                  Original Submission
+                                </CardTitle>
                               </CardHeader>
                               <CardContent>
                                 <AceEditor
@@ -503,7 +532,8 @@ export default function SubmissionViewPage() {
                               <Card key={index} className="border border-gray-200 rounded-lg shadow-sm">
                                 <CardHeader>
                                   <CardTitle className="text-md font-semibold text-gray-900">
-                                    {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
+                                    {sub.student_name} - {sub.file_name} (Similarity:{" "}
+                                    {sub.similarity_percentage?.toFixed(2)}%)
                                   </CardTitle>
                                 </CardHeader>
                                 <CardContent>
