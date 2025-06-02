@@ -20,8 +20,11 @@ export default function ResetPassword() {
 
   useEffect(() => {
     const token = searchParams.get("access_token");
-    if (token) {
-      supabase.auth.setSession({ access_token: token, refresh_token: "" });
+    const refreshToken = searchParams.get("refresh_token");
+    if (token && refreshToken) {
+      supabase.auth.setSession({ access_token: token, refresh_token: refreshToken });
+    } else {
+      setError("Invalid or missing tokens. Please use a valid reset link.");
     }
   }, [searchParams]);
 
@@ -43,7 +46,7 @@ export default function ResetPassword() {
       setError(error.message);
     } else {
       setMessage("Password updated successfully! Redirecting to login...");
-      setTimeout(() => router.push("/"), 3000);
+      setTimeout(() => router.push("/login"), 3000);
     }
   };
 

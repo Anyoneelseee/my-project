@@ -6,26 +6,29 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react"; // Spinner Icon
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
 const ForgotPassword: React.FC = () => {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false); // ✅ Loading state
+  const [loading, setLoading] = useState(false);
 
   const handlePasswordReset = async (event: React.FormEvent) => {
     event.preventDefault();
     setMessage("");
     setError("");
-    setLoading(true); // ✅ Set loading to true while request is in progress
+    setLoading(true);
+
+    const redirectUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password`;
+    console.log("Redirect URL:", redirectUrl); // Debug log
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/reset-password`,
+      redirectTo: redirectUrl,
     });
 
-    setLoading(false); // ✅ Reset loading state
+    setLoading(false);
 
     if (error) {
       setError(error.message);
