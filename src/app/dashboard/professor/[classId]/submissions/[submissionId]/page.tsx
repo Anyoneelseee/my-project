@@ -26,7 +26,6 @@ import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Class {
   id: string;
@@ -71,7 +70,6 @@ export default function SubmissionViewPage() {
   const [aiPercentage, setAiPercentage] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [similarSubmissions, setSimilarSubmissions] = useState<Submission[]>([]);
-  const [similarityFilter, setSimilarityFilter] = useState<number>(10);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
   useEffect(() => {
@@ -273,8 +271,7 @@ export default function SubmissionViewPage() {
                     ...sub,
                     similarity_percentage: similarityPercentage,
                   };
-                })
-                .filter((sub) => sub.similarity_percentage! >= similarityFilter);
+                });
               setSimilarSubmissions(similar);
             } catch (err) {
               console.warn("Similarity detection error:", err);
@@ -294,7 +291,7 @@ export default function SubmissionViewPage() {
     };
 
     initialize();
-  }, [classId, submissionId, router, similarityFilter]);
+  }, [classId, submissionId, router]); // Removed similarityFilter from dependencies
 
   const handleRunCode = () => {
     if (!code.trim()) {
@@ -479,24 +476,6 @@ export default function SubmissionViewPage() {
                   <Card className="border border-gray-200 rounded-lg shadow-sm w-full">
                     <CardHeader>
                       <CardTitle className="text-lg font-semibold text-gray-900">Code Similarity</CardTitle>
-                      <div className="mt-2">
-                        <Label>Filter by Similarity (%)</Label>
-                        <Select
-                          value={similarityFilter.toString()}
-                          onValueChange={(value) => setSimilarityFilter(parseInt(value))}
-                        >
-                          <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Select similarity threshold" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="10">10%</SelectItem>
-                            <SelectItem value="20">20%</SelectItem>
-                            <SelectItem value="30">30%</SelectItem>
-                            <SelectItem value="40">40%</SelectItem>
-                            <SelectItem value="50">50%</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
@@ -532,8 +511,7 @@ export default function SubmissionViewPage() {
                               <Card key={index} className="border border-gray-200 rounded-lg shadow-sm">
                                 <CardHeader>
                                   <CardTitle className="text-md font-semibold text-gray-900">
-                                    {sub.student_name} - {sub.file_name} (Similarity:{" "}
-                                    {sub.similarity_percentage?.toFixed(2)}%)
+                                    {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
                                   </CardTitle>
                                 </CardHeader>
                                 <CardContent>

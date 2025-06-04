@@ -22,9 +22,15 @@ export default function ResetPassword() {
     const token = searchParams.get("access_token");
     const refreshToken = searchParams.get("refresh_token");
     if (token && refreshToken) {
-      supabase.auth.setSession({ access_token: token, refresh_token: refreshToken });
+      supabase.auth
+        .setSession({ access_token: token, refresh_token: refreshToken })
+        .then(({ error: sessionError }) => {
+          if (sessionError) {
+            setError("Failed to set session. Please use a valid reset link.");
+          }
+        });
     } else {
-      setError("Invalid or missing tokens. Please use a valid reset link.");
+      setError("");
     }
   }, [searchParams]);
 
