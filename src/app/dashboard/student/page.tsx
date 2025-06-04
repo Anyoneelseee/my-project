@@ -13,7 +13,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -33,7 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ClassCard } from "../professor/ClassCard";
 import Link from "next/link";
 
 // Interface for a class
@@ -43,6 +41,34 @@ interface Class {
   section: string;
   course: string;
   code: string;
+}
+
+// Redesign ClassCard Component
+function ClassCard({ classData }: { classData: Class }) {
+  return (
+    <Card className="bg-white shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden">
+      <CardHeader className="bg-gradient-to-r from-green-50 to-white p-4 rounded-t-xl">
+        <CardTitle className="text-xl md:text-2xl font-bold text-green-800 truncate">
+          {classData.name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
+        <div className="space-y-2">
+          <p className="text-sm md:text-base text-gray-600">
+            Section: {classData.section}
+          </p>
+          <p className="text-sm md:text-base text-gray-600">
+            Course: {classData.course}
+          </p>
+        </div>
+        <div className="mt-4">
+          <p className="text-sm md:text-base font-semibold text-green-700 bg-green-50 px-3 py-1 rounded-full inline-block">
+            Code: {classData.code}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function StudentDashboard() {
@@ -55,7 +81,6 @@ export default function StudentDashboard() {
     const initialize = async () => {
       setIsLoading(true);
       try {
-        // Wait for Supabase to restore session
         await new Promise((resolve) => {
           const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
@@ -65,21 +90,18 @@ export default function StudentDashboard() {
           return () => subscription.unsubscribe();
         });
 
-        // Check for existing session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError || !session) {
           console.error("No session found:", sessionError?.message);
           redirect("/login");
         }
 
-        // Verify user
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
           console.error("Auth error:", authError?.message);
           redirect("/login");
         }
 
-        // Check user role
         const role = await getUserRole();
         if (!role) {
           redirect("/login");
@@ -88,15 +110,12 @@ export default function StudentDashboard() {
           redirect("/dashboard/professor");
         }
 
-        // Fetch joined classes via RPC
-        const { data, error } = await supabase
-          .rpc("get_student_classes");
+        const { data, error } = await supabase.rpc("get_student_classes");
 
         if (error) {
           console.error("Error fetching joined classes:", error.message, error.details, error.hint);
           setClasses([]);
         } else {
-          // Validate and set classes
           const validatedClasses = (data as Class[]).filter(
             (cls): cls is Class =>
               cls &&
@@ -119,7 +138,6 @@ export default function StudentDashboard() {
     initialize();
   }, []);
 
-  // Handle joining a class
   const handleJoinClass = async () => {
     if (!classCode) {
       alert("Please enter a class code.");
@@ -127,7 +145,6 @@ export default function StudentDashboard() {
     }
 
     try {
-      // Ensure session is valid
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         console.error("No session in join class:", sessionError?.message);
@@ -140,11 +157,9 @@ export default function StudentDashboard() {
         redirect("/login");
       }
 
-      // Normalize the class code
       const normalizedClassCode = classCode.trim().toUpperCase();
       console.log("Normalized class code:", normalizedClassCode);
 
-      // Find the class by code using RPC
       const { data: classDataArray, error: classError } = await supabase
         .rpc("get_class_by_code", { class_code: normalizedClassCode });
 
@@ -163,7 +178,6 @@ export default function StudentDashboard() {
       const classData = classDataArray[0];
       console.log("Found class:", classData);
 
-      // Join the class
       const { error: joinError } = await supabase
         .from("class_members")
         .insert([{ class_id: classData.id, student_id: user.id }]);
@@ -178,9 +192,7 @@ export default function StudentDashboard() {
         return;
       }
 
-      // Fetch updated joined classes
-      const { data, error: fetchError } = await supabase
-        .rpc("get_student_classes");
+      const { data, error: fetchError } = await supabase.rpc("get_student_classes");
 
       if (fetchError) {
         console.error("Error fetching updated classes:", fetchError.message, fetchError.details, fetchError.hint);
@@ -207,74 +219,86 @@ export default function StudentDashboard() {
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <SidebarProvider>
       <StudentSidebar classes={classes} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
+        <header className="flex h-16 items-center justify-between px-6 bg-white shadow-sm border-b">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors" />
             <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard/student">
+              <BreadcrumbList className="text-sm">
+                <BreadcrumbItem>
+                  <BreadcrumbLink href="/dashboard/student" className="text-blue-600 hover:underline">
                     Student Dashboard
                   </BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbSeparator className="mx-2 text-gray-400" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage>Home</BreadcrumbPage>
+                  <BreadcrumbPage className="text-gray-900">Home</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Join a Class Card */}
-            <Card className="flex flex-col justify-between p-6 border-dashed border-2 border-gray-300 h-[200px]">
-              <CardHeader className="flex flex-col items-center justify-center text-center pt-4 md:pt-6 lg:pt-8">
-                <CardTitle className="text-lg md:text-xl lg:text-2xl xl:text-3xl">
+            <Card className="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
+              <CardHeader className="flex-1 flex items-center justify-center p-4">
+                <CardTitle className="text-center text-blue-800 font-bold text-xl md:text-2xl">
                   Join a Class
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex justify-end">
+              <CardContent className="p-4 pt-0">
                 <Dialog open={isJoinDialogOpen} onOpenChange={setIsJoinDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="default" className="rounded-xl flex items-center gap-2 px-4">
+                    <Button
+                      variant="default"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl py-2 transition-colors flex items-center justify-center gap-2 shadow-md"
+                    >
                       <Plus className="w-5 h-5" />
-                      Join
+                      Join Class
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="bg-white rounded-xl shadow-2xl p-6 max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Join a Class</DialogTitle>
-                      <DialogDescription>
-                        Enter the class code provided by your professor to join the class.
+                      <DialogTitle className="text-2xl font-semibold text-gray-900">
+                        Join a Class
+                      </DialogTitle>
+                      <DialogDescription className="text-gray-600 mt-2">
+                        Enter the class code provided by your professor to join.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="code" className="text-right">
+                      <div className="grid grid-cols-1 gap-2">
+                        <Label htmlFor="code" className="text-sm font-medium text-gray-700">
                           Class Code
                         </Label>
                         <Input
                           id="code"
                           value={classCode}
                           onChange={(e) => setClassCode(e.target.value)}
-                          className="col-span-3"
+                          placeholder="Enter class code"
+                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          autoFocus
                         />
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleJoinClass}>Join Class</Button>
+                      <Button
+                        onClick={handleJoinClass}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition-colors"
+                      >
+                        Join
+                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
@@ -283,12 +307,15 @@ export default function StudentDashboard() {
 
             {/* Display Joined Classes */}
             {classes.map((classData) => (
-              <Link href={`/dashboard/student/my-classes/${classData.id}`} key={classData.id}>
+              <Link
+                href={`/dashboard/student/my-classes/${classData.id}`}
+                key={classData.id}
+                className="hover:scale-105 transition-transform duration-200"
+              >
                 <ClassCard classData={classData} />
               </Link>
             ))}
           </div>
-          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
         </div>
       </SidebarInset>
     </SidebarProvider>

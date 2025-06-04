@@ -7,6 +7,8 @@ import { getUserRole } from "@/lib/auth";
 import ActivitiesList from "./components/ActivitiesList";
 import CodeEditorSection from "./components/CodeEditorSection";
 import ClassDetails from "./components/ClassDetails";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 interface Class {
   id: string;
@@ -34,7 +36,6 @@ export default function JoinedClassPage() {
     const initialize = async () => {
       setIsLoading(true);
       try {
-        // Wait for Supabase to restore session
         await new Promise((resolve) => {
           const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
@@ -44,7 +45,6 @@ export default function JoinedClassPage() {
           return () => subscription.unsubscribe();
         });
 
-        // Check for existing session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError || !session) {
           console.error("No session found:", sessionError?.message);
@@ -52,7 +52,6 @@ export default function JoinedClassPage() {
           return;
         }
 
-        // Verify user
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (authError || !user) {
           console.error("Auth error:", authError?.message);
@@ -60,7 +59,6 @@ export default function JoinedClassPage() {
           return;
         }
 
-        // Check user role
         const role = await getUserRole();
         if (!role) {
           router.push("/login");
@@ -71,7 +69,6 @@ export default function JoinedClassPage() {
           return;
         }
 
-        // Verify class membership and get class data
         const { data: membershipData, error: membershipError } = await supabase
           .rpc("get_student_classes")
           .eq("id", classId);
@@ -82,11 +79,9 @@ export default function JoinedClassPage() {
           return;
         }
 
-        // Set class data
         const classData = membershipData[0] as Class;
         setClassData(classData);
 
-        // Fetch activities
         const { data: activitiesData, error: activitiesError } = await supabase
           .rpc("get_student_activities", { class_id: classId });
 
@@ -115,14 +110,62 @@ export default function JoinedClassPage() {
     initialize();
   }, [classId, router]);
 
-  if (isLoading) return <div>Loading...</div>;
-  if (!classData) return <div>Class not found.</div>;
+  const handleBack = () => {
+    router.push("/dashboard/student");
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!classData) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl font-semibold text-gray-600">Class not found.</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4">
-      <ClassDetails classData={classData} />
-      <ActivitiesList activities={activities} />
-      <CodeEditorSection classId={classId as string} />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header with Back Button */}
+      <header className="flex items-center justify-between p-6 bg-white shadow-sm border-b">
+        <Button
+          onClick={handleBack}
+          variant="ghost"
+          className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back to Dashboard
+        </Button>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+          {classData.name} - {classData.section}
+        </h1>
+      </header>
+
+      {/* Main Content */}
+      <div className="p-6 max-w-7xl mx-auto space-y-8">
+        {/* Class Details Section */}
+        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
+          <ClassDetails classData={classData} />
+        </section>
+
+        {/* Activities List Section */}
+        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Class Activities</h2>
+          <ActivitiesList activities={activities} />
+        </section>
+
+        {/* Code Editor Section */}
+        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Code Editor</h2>
+          <CodeEditorSection classId={classId as string} />
+        </section>
+      </div>
     </div>
   );
 }
