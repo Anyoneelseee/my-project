@@ -11,7 +11,6 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
@@ -188,33 +187,44 @@ export default function ProfessorDashboard() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      </div>
+    );
   }
 
   return (
     <SidebarProvider>
       <ProfessorSidebar classes={classes} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
-          <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbPage className="text-gray-900 text-sm font-medium">Home</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+        <header className="flex h-16 items-center justify-between px-6 bg-white shadow-sm border-b">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors" />
+            <Breadcrumb>
+              <BreadcrumbList className="text-sm">
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="text-gray-900 font-medium">
+                    Home
+                    {/* Customize page text color (text-gray-900) in className */}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <Card className="flex flex-col justify-between p-6 border-dashed border-2 border-gray-300 h-[200px]">
-              <CardHeader className="flex flex-col items-center justify-center text-center pt-4 md:pt-6 lg:pt-8">
-                <CardTitle className="text-lg md:text-xl lg:text-2xl xl:text-3xl">
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Create a Class Card */}
+            <Card className="bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
+              {/* Customize card background gradient (from-purple-50 to-white) and border color (border-purple-200) in className */}
+              <CardHeader className="flex-1 flex items-center justify-center p-4">
+                <CardTitle className="text-center text-purple-800 font-bold text-xl md:text-2xl">
                   Create a Class
+                  {/* Customize title text color (text-purple-800) in className */}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex justify-end">
+              <CardContent className="p-4 pt-0">
                 <CreateClassDialog
                   isOpen={isCreateDialogOpen}
                   onOpenChange={setIsCreateDialogOpen}
@@ -224,13 +234,24 @@ export default function ProfessorDashboard() {
                 />
               </CardContent>
             </Card>
-            {classes.map((classData) => (
-              <Link href={`/dashboard/professor/${classData.id}`} key={classData.id}>
-                <ClassCard classData={classData} />
-              </Link>
-            ))}
+
+            {/* Display Created Classes */}
+            {classes.length > 0 ? (
+              classes.map((classData) => (
+                <Link
+                  href={`/dashboard/professor/${classData.id}`}
+                  key={classData.id}
+                  className="hover:scale-105 transition-transform duration-200"
+                >
+                  <ClassCard classData={classData} />
+                </Link>
+              ))
+            ) : (
+              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center text-gray-600 text-lg">
+                No classes created yet. Click &quot;Create a Class&quot; to get started!
+              </div>
+            )}
           </div>
-          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
         </div>
         <ClassCodeDialog
           isOpen={isCodeDialogOpen}

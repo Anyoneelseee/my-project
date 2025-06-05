@@ -46,23 +46,44 @@ interface Class {
 // Redesign ClassCard Component
 function ClassCard({ classData }: { classData: Class }) {
   return (
-    <Card className="bg-white shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-green-50 to-white p-4 rounded-t-xl">
-        <CardTitle className="text-xl md:text-2xl font-bold text-green-800 truncate">
+    <Card
+      className="shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden"
+      style={{ backgroundColor: "#061A40" }} // Customize background color here
+    >
+      <CardHeader
+        className="p-4 rounded-t-xl"
+        style={{ backgroundColor: "#061A40" }} // Customize header background color here (matches card background for consistency)
+      >
+        <CardTitle
+          className="text-xl md:text-2xl font-bold truncate"
+          style={{ color: "#B9D6F2" }} // Customize title text color here
+        >
           {classData.name}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
         <div className="space-y-2">
-          <p className="text-sm md:text-base text-gray-600">
+          <p
+            className="text-sm md:text-base"
+            style={{ color: "#B9D6F2" }} // Customize body text color here
+          >
             Section: {classData.section}
           </p>
-          <p className="text-sm md:text-base text-gray-600">
+          <p
+            className="text-sm md:text-base"
+            style={{ color: "#B9D6F2" }} // Customize body text color here
+          >
             Course: {classData.course}
           </p>
         </div>
         <div className="mt-4">
-          <p className="text-sm md:text-base font-semibold text-green-700 bg-green-50 px-3 py-1 rounded-full inline-block">
+          <p
+            className="text-sm md:text-base font-semibold px-3 py-1 rounded-full inline-block"
+            style={{
+              color: "#B9D6F2", // Customize class code text color here
+              backgroundColor: "#0353A4", // Customize class code background color here
+            }}
+          >
             Code: {classData.code}
           </p>
         </div>
@@ -236,13 +257,20 @@ export default function StudentDashboard() {
             <Breadcrumb>
               <BreadcrumbList className="text-sm">
                 <BreadcrumbItem>
-                  <BreadcrumbLink href="/dashboard/student" className="text-blue-600 hover:underline">
+                  <BreadcrumbLink
+                    href="/dashboard/student"
+                    className="text-blue-600 hover:underline"
+                    // Customize link color (text-blue-600) in className
+                  >
                     Student Dashboard
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="mx-2 text-gray-400" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-gray-900">Home</BreadcrumbPage>
+                  <BreadcrumbPage className="text-gray-900">
+                    Home
+                    {/* Customize page text color (text-gray-900) in className */}
+                  </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
@@ -252,9 +280,11 @@ export default function StudentDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Join a Class Card */}
             <Card className="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
+              {/* Customize card background gradient (from-blue-50 to-white) and border color (border-blue-200) in className */}
               <CardHeader className="flex-1 flex items-center justify-center p-4">
                 <CardTitle className="text-center text-blue-800 font-bold text-xl md:text-2xl">
                   Join a Class
+                  {/* Customize title text color (text-blue-800) in className */}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
@@ -263,6 +293,7 @@ export default function StudentDashboard() {
                     <Button
                       variant="default"
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl py-2 transition-colors flex items-center justify-center gap-2 shadow-md"
+                      // Customize button background color (bg-blue-600) and hover color (hover:bg-blue-700) in className
                     >
                       <Plus className="w-5 h-5" />
                       Join Class
@@ -272,14 +303,20 @@ export default function StudentDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-2xl font-semibold text-gray-900">
                         Join a Class
+                        {/* Customize title text color (text-gray-900) in className */}
                       </DialogTitle>
                       <DialogDescription className="text-gray-600 mt-2">
                         Enter the class code provided by your professor to join.
+                        {/* Customize description text color (text-gray-600) in className */}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-1 gap-2">
-                        <Label htmlFor="code" className="text-sm font-medium text-gray-700">
+                        <Label
+                          htmlFor="code"
+                          className="text-sm font-medium text-gray-700"
+                          // Customize label text color (text-gray-700) in className
+                        >
                           Class Code
                         </Label>
                         <Input
@@ -289,6 +326,7 @@ export default function StudentDashboard() {
                           placeholder="Enter class code"
                           className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           autoFocus
+                          // Customize input border (border-gray-300) and focus ring (focus:ring-blue-500) in className
                         />
                       </div>
                     </div>
@@ -296,6 +334,7 @@ export default function StudentDashboard() {
                       <Button
                         onClick={handleJoinClass}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition-colors"
+                        // Customize button background color (bg-blue-600) and hover color (hover:bg-blue-700) in className
                       >
                         Join
                       </Button>
