@@ -24,7 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import AceEditor, { IMarker, IAnnotation } from "react-ace"; // Import Annotation
+import AceEditor, { IMarker, IAnnotation } from "react-ace";
 import "ace-builds/src-noconflict/mode-python";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/mode-java";
@@ -134,8 +134,20 @@ export default function BulkAICheckerPage() {
       return;
     }
 
+    const supportedExtensions = new Set([".py", ".cpp", ".c", ".java"]);
     const newFiles: FileWithResult[] = await Promise.all(
       selectedFiles.map(async (file) => {
+        const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+        if (!supportedExtensions.has(extension)) {
+          return {
+            file,
+            code: "",
+            aiPercentage: null,
+            error: `Unsupported file type. Only .py, .cpp, .c, and .java files are allowed.`,
+            similarity: null,
+          };
+        }
+
         try {
           const text = await file.text();
           return {
@@ -156,7 +168,7 @@ export default function BulkAICheckerPage() {
         }
       })
     );
-    setFiles([...files, ...newFiles]);
+    setFiles([...files, ...newFiles.filter((f) => !f.error || f.error.includes("empty"))]);
   };
 
   const handleRemoveFile = (index: number) => {
@@ -243,7 +255,7 @@ export default function BulkAICheckerPage() {
       }
     } else {
       updatedFiles.forEach((fileEntry, idx) => {
-        if (!fileEntry.error && fileEntry.code.trim()) {
+        if (!fileEntry.error && fileEntry.code.trim()) { // Fixed: Replaced 'f' with 'fileEntry'
           updatedFiles[idx] = {
             ...fileEntry,
             similarity: { error: "Not enough valid files for similarity detection (minimum 2 required)" },
@@ -346,6 +358,7 @@ export default function BulkAICheckerPage() {
                     <Input
                       type="file"
                       multiple
+                      accept=".py,.cpp,.c,.java"
                       onChange={handleFileChange}
                       className="mt-2 text-teal-300 bg-gray-800 border-teal-500/20"
                       disabled={isProcessing || files.length >= 10}
