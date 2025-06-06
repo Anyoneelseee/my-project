@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
 import { ProfessorSidebar } from "@/components/professor-sidebar";
@@ -23,9 +23,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import AceEditor from "react-ace";
-import "ace-builds/src-noconflict/mode-javascript";
+import "ace-builds/src-noconflict/mode-python";
+import "ace-builds/src-noconflict/mode-c_cpp";
+import "ace-builds/src-noconflict/mode-java";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
+import { Transition, Dialog } from "@headlessui/react"; // Import Headless UI components
 
 interface Class {
   id: string;
@@ -67,10 +70,138 @@ export default function SubmissionViewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [studentName, setStudentName] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
+  const [language, setLanguage] = useState<string>("");
   const [aiPercentage, setAiPercentage] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [similarSubmissions, setSimilarSubmissions] = useState<Submission[]>([]);
+  const [showApiLimitDialog, setShowApiLimitDialog] = useState(false); // Used now
+  const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false); // Used now
+  const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
+
+  const languageIdMap: { [key: string]: number } = {
+    python: 71, // Python 3
+    cpp: 54,    // C++
+    c: 50,      // C
+    java: 62,   // Java
+  };
+
+  const supportedLanguages = Object.keys(languageIdMap);
+
+  const detectLanguageFromFileName = (fileName: string): string => {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "py":
+        return "python";
+      case "cpp":
+        return "cpp";
+      case "c":
+        return "c";
+      case "java":
+        return "java";
+      default:
+        return "";
+    }
+  };
+
+  const submitCodeToJudge0 = async (sourceCode: string, langId: number) => {
+    try {
+      const response = await fetch("/api/judge0", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_code: sourceCode,
+          language_id: langId,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          setShowApiLimitDialog(true);
+          setIsRunning(false);
+          return null;
+        }
+        const errorMessage = await response.text();
+        throw new Error(`Judge0 submission failed: ${response.statusText} - ${errorMessage}`);
+      }
+
+      const data = await response.json();
+      return data.token;
+    } catch (err) {
+      setConnectionErrorMessage(
+        err instanceof Error ? err.message : "Failed to connect to the code execution server."
+      );
+      setShowConnectionErrorDialog(true);
+      setIsRunning(false);
+      return null;
+    }
+  };
+
+  const pollJudge0Result = async (token: string): Promise<{ stdout: string; stderr: string; status: string }> => {
+    try {
+      let attempts = 0;
+      const maxAttempts = 20;
+      const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      while (attempts < maxAttempts) {
+        const response = await fetch(`/api/judge0?token=${token}`);
+        if (!response.ok) {
+          const errorMessage = await response.text();
+          throw new Error(`Judge0 polling failed: ${response.statusText} - ${errorMessage}`);
+        }
+
+        const data = await response.json();
+        if (data.status.id > 2) {
+          return {
+            stdout: data.stdout || "",
+            stderr: data.stderr || "",
+            status: data.status.description,
+          };
+        }
+
+        attempts++;
+        await delay(1000);
+      }
+
+      throw new Error("Code execution timed out");
+    } catch (err) {
+      setConnectionErrorMessage(
+        err instanceof Error ? err.message : "Failed to retrieve code execution results."
+      );
+      setShowConnectionErrorDialog(true);
+      setIsRunning(false);
+      return { stdout: "", stderr: "Execution timed out or failed", status: "Error" };
+    }
+  };
+
+  const handleRunCode = async () => {
+    if (!code.trim()) {
+      setError((prev) => [...prev, "Code cannot be empty"]);
+      return;
+    }
+
+    if (!languageIdMap[language]) {
+      setError((prev) => [...prev, "Unsupported language"]);
+      return;
+    }
+
+    setIsRunning(true);
+    setOutput([]);
+    setError([]);
+
+    const langId = languageIdMap[language];
+    const token = await submitCodeToJudge0(code, langId);
+    if (!token) return;
+
+    const result = await pollJudge0Result(token);
+    if (result.stdout) {
+      setOutput(result.stdout.split("\n").filter((line) => line));
+    }
+    if (result.stderr) {
+      setError((prev) => [...prev, result.stderr]);
+    }
+    setIsRunning(false);
+  };
 
   useEffect(() => {
     const initialize = async () => {
@@ -121,6 +252,12 @@ export default function SubmissionViewPage() {
 
             const [studentId, fileName] = decodeURIComponent(submissionId as string).split("/");
             setFileName(fileName);
+            const detectedLang = detectLanguageFromFileName(fileName);
+            if (!detectedLang || !supportedLanguages.includes(detectedLang)) {
+              setError((prev) => [...prev, "Unsupported language detected"]);
+            } else {
+              setLanguage(detectedLang);
+            }
 
             const { data: studentData, error: studentError } = (await supabase
               .rpc("get_class_student_profiles", { class_id_input: classId })
@@ -301,42 +438,12 @@ export default function SubmissionViewPage() {
     initialize();
   }, [classId, submissionId, router]);
 
-  const handleRunCode = () => {
-    if (!code.trim()) {
-      setError((prev) => [...prev, "Code cannot be empty"]);
-      return;
-    }
-
-    setIsRunning(true);
-    setOutput([]);
-    setError([]);
-
-    try {
-      const originalConsoleLog = console.log;
-      let outputLog = "";
-      console.log = (message: string | number | boolean) => {
-        outputLog += `${message}\n`;
-      };
-      // eslint-disable-next-line no-eval
-      eval(code);
-      console.log = originalConsoleLog;
-      setOutput(outputLog ? outputLog.split("\n").filter((line) => line) : ["No output"]);
-    } catch (err) {
-      setError((prev) => [
-        ...prev,
-        err instanceof Error ? err.message : "An unknown error occurred",
-      ]);
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
   }
 
   if (!classData) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Class not found.</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Class not found.</div>;
   }
 
   return (
@@ -353,15 +460,15 @@ export default function SubmissionViewPage() {
         ]}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
-          <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+          <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
                 <BreadcrumbLink
                   href="/dashboard/professor"
-                  className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors"
+                  className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
                 >
                   Home
                 </BreadcrumbLink>
@@ -370,188 +477,304 @@ export default function SubmissionViewPage() {
               <BreadcrumbItem>
                 <BreadcrumbLink
                   href={`/dashboard/professor/${classId}`}
-                  className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors"
+                  className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
                 >
                   {classData.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage className="text-gray-900 text-sm font-medium">Submission</BreadcrumbPage>
+                <BreadcrumbPage className="text-teal-400 text-sm font-medium">Submission</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex-1 p-6 bg-gray-100">
-          <div className="max-w-7xl mx-auto space-y-6">
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-2xl font-semibold text-gray-900">
+        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
+          <div className="max-w-7xl mx-auto space-y-4">
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20">
+                <CardTitle className="text-2xl font-semibold text-teal-400">
                   Submission: {fileName}
                 </CardTitle>
-                <p className="text-sm text-gray-500">Submitted by {studentName}</p>
+                <p className="text-sm text-teal-300">Submitted by {studentName}</p>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="flex flex-col gap-6">
+              <CardContent className="pt-4">
+                <div className="flex flex-col gap-4">
                   {/* Code Editor and Output */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Code Editor */}
-                    <Card className="border border-gray-200 rounded-lg shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold text-gray-900">Code Editor</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Label className="text-sm font-medium text-gray-500">JavaScript Code</Label>
-                        <AceEditor
-                          mode="javascript"
-                          theme="monokai"
-                          value={code}
-                          onChange={(newCode) => setCode(newCode)}
-                          name="code-editor"
-                          editorProps={{ $blockScrolling: true }}
-                          setOptions={{
-                            enableBasicAutocompletion: true,
-                            enableLiveAutocompletion: true,
-                            enableSnippets: true,
-                            showLineNumbers: true,
-                            tabSize: 2,
-                            fontSize: 14,
-                            wrap: true,
-                          }}
-                          style={{ width: "100%", height: "400px" }}
-                          ref={editorRef}
-                          readOnly={isRunning}
-                        />
-                        <Button
-                          onClick={handleRunCode}
-                          disabled={isRunning || !code.trim()}
-                          className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                        >
-                          {isRunning ? "Running..." : "Run Code"}
-                        </Button>
-                      </CardContent>
-                    </Card>
+                    <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
+                      <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Editor</h3>
+                      <Label className="text-sm font-medium text-teal-300">Submitted Code ({language || "unknown"})</Label>
+                      <AceEditor
+                        mode={
+                          language === "cpp" || language === "c"
+                            ? "c_cpp"
+                            : language === "java"
+                            ? "java"
+                            : language === "python"
+                            ? "python"
+                            : "text"
+                        }
+                        theme="monokai"
+                        value={code}
+                        onChange={(newCode) => setCode(newCode)}
+                        name="code-editor"
+                        editorProps={{ $blockScrolling: true }}
+                        setOptions={{
+                          enableBasicAutocompletion: true,
+                          enableLiveAutocompletion: true,
+                          enableSnippets: true,
+                          showLineNumbers: true,
+                          tabSize: 2,
+                          fontSize: 14,
+                          wrap: true,
+                        }}
+                        style={{ width: "100%", height: "350px" }}
+                        ref={editorRef}
+                        readOnly={isRunning}
+                      />
+                      <Button
+                        onClick={handleRunCode}
+                        disabled={isRunning || !code.trim() || !languageIdMap[language]}
+                        className="mt-4 w-full bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
+                      >
+                        {isRunning ? "Running..." : "Run Code"}
+                      </Button>
+                    </div>
 
                     {/* Code Output */}
-                    <Card className="border border-gray-200 rounded-lg shadow-sm">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold text-gray-900">Output</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div
-                          className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
-                          style={{ width: "100%", height: "400px", whiteSpace: "pre-wrap" }}
-                        >
-                          {output.length === 0 && error.length === 0 && (
-                            <pre className="text-gray-400">Run the code to see the output.</pre>
-                          )}
-                          {output.map((line, index) => (
-                            <div key={`output-${index}`} className="flex items-center">
-                              <span>{line}</span>
-                            </div>
-                          ))}
-                          {error.map((line, index) => (
-                            <div key={`error-${index}`} className="text-red-400">
-                              {line}
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
+                      <h3 className="text-lg font-semibold text-teal-400 mb-2">Output</h3>
+                      <div
+                        className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
+                        style={{ width: "100%", height: "350px", whiteSpace: "pre-wrap" }}
+                      >
+                        {output.length === 0 && error.length === 0 && (
+                          <pre className="text-teal-300">Run the code to see the output.</pre>
+                        )}
+                        {output.map((line, index) => (
+                          <div key={`output-${index}`} className="flex items-center text-teal-300">
+                            <span>{line}</span>
+                          </div>
+                        ))}
+                        {error.map((line, index) => (
+                          <div key={`error-${index}`} className="text-red-400">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* AI Detector */}
-                  <Card className="border border-gray-200 rounded-lg shadow-sm w-full">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">AI Detector</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-center h-[200px] text-gray-500">
-                        {aiError ? (
-                          <p className="text-red-500">{aiError}</p>
-                        ) : aiPercentage !== null ? (
-                          <p className="text-lg font-semibold text-gray-900">
-                            AI-Generated Percentage: {aiPercentage.toFixed(2)}%
-                          </p>
-                        ) : (
-                          <p>Loading AI detection...</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
+                    <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Detector</h3>
+                    <div className="flex items-center justify-center h-[100px] text-teal-300">
+                      {aiError ? (
+                        <p className="text-red-400">{aiError}</p>
+                      ) : aiPercentage !== null ? (
+                        <p className="text-md font-semibold text-teal-400">
+                          AI-Generated Percentage: {aiPercentage.toFixed(2)}%
+                        </p>
+                      ) : (
+                        <p>Loading AI detection...</p>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Code Similarity */}
-                  <Card className="border border-gray-200 rounded-lg shadow-sm w-full">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold text-gray-900">Code Similarity</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {similarSubmissions.length === 0 ? (
-                          <p className="text-gray-500 text-center">No similar submissions found.</p>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <Card className="border border-gray-200 rounded-lg shadow-sm">
-                              <CardHeader>
-                                <CardTitle className="text-md font-semibold text-gray-900">
-                                  Original Submission
-                                </CardTitle>
-                              </CardHeader>
-                              <CardContent>
-                                <AceEditor
-                                  mode="javascript"
-                                  theme="monokai"
-                                  value={code}
-                                  name="original-editor"
-                                  editorProps={{ $blockScrolling: true }}
-                                  setOptions={{
-                                    readOnly: true,
-                                    showLineNumbers: true,
-                                    tabSize: 2,
-                                    fontSize: 12,
-                                    wrap: true,
-                                  }}
-                                  style={{ width: "100%", height: "300px" }}
-                                />
-                              </CardContent>
-                            </Card>
-                            {similarSubmissions.map((sub, index) => (
-                              <Card key={index} className="border border-gray-200 rounded-lg shadow-sm">
-                                <CardHeader>
-                                  <CardTitle className="text-md font-semibold text-gray-900">
-                                    {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
-                                  </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                  <AceEditor
-                                    mode="javascript"
-                                    theme="monokai"
-                                    value={sub.code}
-                                    name={`similar-editor-${index}`}
-                                    editorProps={{ $blockScrolling: true }}
-                                    setOptions={{
-                                      readOnly: true,
-                                      showLineNumbers: true,
-                                      tabSize: 2,
-                                      fontSize: 12,
-                                      wrap: true,
-                                    }}
-                                    style={{ width: "100%", height: "300px" }}
-                                  />
-                                </CardContent>
-                              </Card>
-                            ))}
+                  <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
+                    <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Similarity</h3>
+                    <div className="space-y-2">
+                      {similarSubmissions.length === 0 ? (
+                        <p className="text-teal-300 text-center">No similar submissions found.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
+                            <h4 className="text-md font-semibold text-teal-400 mb-2">
+                              Original Submission
+                            </h4>
+                            <AceEditor
+                              mode={
+                                language === "cpp" || language === "c"
+                                  ? "c_cpp"
+                                  : language === "java"
+                                  ? "java"
+                                  : language === "python"
+                                  ? "python"
+                                  : "text"
+                              }
+                              theme="monokai"
+                              value={code}
+                              name="original-editor"
+                              editorProps={{ $blockScrolling: true }}
+                              setOptions={{
+                                readOnly: true,
+                                showLineNumbers: true,
+                                tabSize: 2,
+                                fontSize: 12,
+                                wrap: true,
+                              }}
+                              style={{ width: "100%", height: "250px" }}
+                            />
                           </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                          {similarSubmissions.map((sub, index) => (
+                            <div key={index} className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
+                              <h4 className="text-md font-semibold text-teal-400 mb-2">
+                                {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
+                              </h4>
+                              <AceEditor
+                                mode={
+                                  detectLanguageFromFileName(sub.file_name) === "cpp" || detectLanguageFromFileName(sub.file_name) === "c"
+                                    ? "c_cpp"
+                                    : detectLanguageFromFileName(sub.file_name) === "java"
+                                    ? "java"
+                                    : detectLanguageFromFileName(sub.file_name) === "python"
+                                    ? "python"
+                                    : "text"
+                                }
+                                theme="monokai"
+                                value={sub.code}
+                                name={`similar-editor-${index}`}
+                                editorProps={{ $blockScrolling: true }}
+                                setOptions={{
+                                  readOnly: true,
+                                  showLineNumbers: true,
+                                  tabSize: 2,
+                                  fontSize: 12,
+                                  wrap: true,
+                                }}
+                                style={{ width: "100%", height: "250px" }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         </main>
       </SidebarInset>
+
+      {/* API Limit Dialog */}
+      <Transition appear show={showApiLimitDialog} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-50" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">
+                    API Limit Reached
+                  </Dialog.Title>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-200">
+                      You’ve reached the maximum number of code execution requests (50 per day). Please wait 24 hours to
+                      run more code. For concerns or inquiries, contact the developer at:{" "}
+                      <a
+                        href="mailto:jbgallego3565qc@student.fatima.edu.ph"
+                        className="text-teal-400 hover:underline ml-1"
+                      >
+                        jbgallego3565qc@student.fatima.edu.ph
+                      </a>
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                      onClick={() => setShowApiLimitDialog(false)}
+                    >
+                      Understood
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* Connection Error Dialog */}
+      <Transition appear show={showConnectionErrorDialog} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowConnectionErrorDialog(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-50" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">
+                    Connection Error
+                  </Dialog.Title>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-200">
+                      {connectionErrorMessage} Please check your internet connection and try again. If the issue
+                      persists, contact support at:{" "}
+                      <a
+                        href="mailto:jbgallego3565qc@student.fatima.edu.ph"
+                        className="text-teal-400 hover:underline ml-1"
+                      >
+                        jbgallego3565qc@student.fatima.edu.ph
+                      </a>
+                    </p>
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                      onClick={() => setShowConnectionErrorDialog(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </SidebarProvider>
   );
 }

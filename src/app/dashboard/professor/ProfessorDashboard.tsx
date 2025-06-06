@@ -188,8 +188,8 @@ export default function ProfessorDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        <div className="text-xl font-semibold text-gray-200">Loading...</div>
       </div>
     );
   }
@@ -198,30 +198,27 @@ export default function ProfessorDashboard() {
     <SidebarProvider>
       <ProfessorSidebar classes={classes} />
       <SidebarInset>
-        <header className="flex h-16 items-center justify-between px-6 bg-white shadow-sm border-b">
+        <header className="flex h-16 items-center justify-between px-6 bg-gradient-to-br from-gray-800 to-gray-900 border-b border-teal-500/20">
           <div className="flex items-center gap-4">
-            <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors" />
+            <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-gray-200" />
             <Breadcrumb>
               <BreadcrumbList className="text-sm">
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-gray-900 font-medium">
+                  <BreadcrumbPage className="text-teal-400 font-medium">
                     Home
-                    {/* Customize page text color (text-gray-900) in className */}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-        <div className="p-6">
+        <div className="p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Create a Class Card */}
-            <Card className="bg-gradient-to-br from-purple-50 to-white border-2 border-purple-200 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
-              {/* Customize card background gradient (from-purple-50 to-white) and border color (border-purple-200) in className */}
+            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
               <CardHeader className="flex-1 flex items-center justify-center p-4">
-                <CardTitle className="text-center text-purple-800 font-bold text-xl md:text-2xl">
+                <CardTitle className="text-center text-teal-400 font-bold text-xl md:text-2xl">
                   Create a Class
-                  {/* Customize title text color (text-purple-800) in className */}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
@@ -247,7 +244,7 @@ export default function ProfessorDashboard() {
                 </Link>
               ))
             ) : (
-              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center text-gray-600 text-lg">
+              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center text-teal-300 text-lg">
                 No classes created yet. Click &quot;Create a Class&quot; to get started!
               </div>
             )}

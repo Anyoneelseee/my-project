@@ -314,41 +314,41 @@ export default function MonitoringPage() {
   }, []);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
   }
 
   if (!classData) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Class not found.</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Class not found.</div>;
   }
 
   return (
     <SidebarProvider>
       <ProfessorSidebar classes={[classData]} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
-          <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+          <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors">
+                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
                   Home
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage className="text-gray-900 text-sm font-medium">
+                <BreadcrumbPage className="text-teal-400 text-sm font-medium">
                   Monitoring - {classData.name} ({classData.section})
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex-1 p-6 bg-gray-100">
+        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <div className="max-w-7xl mx-auto space-y-8">
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200 flex flex-row justify-between items-center">
-                <CardTitle className="text-xl font-semibold text-gray-900">
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20 flex flex-row justify-between items-center">
+                <CardTitle className="text-xl font-semibold text-teal-400">
                   Student Activity Logs
                 </CardTitle>
                 <div className="flex gap-2">
@@ -356,17 +356,19 @@ export default function MonitoringPage() {
                     placeholder="Filter by student or action"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    className="w-64"
+                    className="w-64 bg-gray-700/50 text-teal-300 border-teal-500/20 focus:ring-teal-500 focus:border-teal-500"
                   />
                   <Button
                     onClick={() => setIsPaused(!isPaused)}
                     variant={isPaused ? "default" : "outline"}
+                    className={`${isPaused ? "bg-teal-500 hover:bg-teal-600" : "bg-gray-700/50 hover:bg-gray-600 text-teal-300"} text-white font-semibold py-2 rounded-lg transition-colors`}
                   >
                     {isPaused ? "Resume Updates" : "Pause Updates"}
                   </Button>
                   <Button
                     onClick={fetchLogs}
                     variant="outline"
+                    className="bg-gray-700/50 hover:bg-gray-600 text-teal-300 font-semibold py-2 rounded-lg transition-colors"
                     title="Refresh logs"
                   >
                     <RefreshCw className="h-4 w-4" />
@@ -375,17 +377,17 @@ export default function MonitoringPage() {
               </CardHeader>
               <CardContent className="pt-6">
                 {errorMessage ? (
-                  <p className="text-red-500 text-center">{errorMessage}</p>
+                  <p className="text-red-400 text-center">{errorMessage}</p>
                 ) : aggregatedLogs.length === 0 ? (
-                  <p className="text-gray-500 text-center">No activity logs available.</p>
+                  <p className="text-teal-300 text-center">No activity logs available.</p>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Student Name</TableHead>
-                        <TableHead>Latest Action</TableHead>
-                        <TableHead>Last Active</TableHead>
-                        <TableHead>Details</TableHead>
+                        <TableHead className="text-teal-400">Student Name</TableHead>
+                        <TableHead className="text-teal-400">Latest Action</TableHead>
+                        <TableHead className="text-teal-400">Last Active</TableHead>
+                        <TableHead className="text-teal-400">Details</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -394,18 +396,19 @@ export default function MonitoringPage() {
                           <TableRow
                             className={
                               new Date().getTime() - new Date(aggLog.latest_timestamp).getTime() < 30 * 1000
-                                ? "bg-blue-50"
+                                ? "bg-teal-900/20"
                                 : ""
                             }
                           >
-                            <TableCell>{aggLog.student_name}</TableCell>
-                            <TableCell>{aggLog.latest_action}</TableCell>
-                            <TableCell>{new Date(aggLog.latest_timestamp).toLocaleString()}</TableCell>
+                            <TableCell className="text-teal-300">{aggLog.student_name}</TableCell>
+                            <TableCell className="text-teal-300">{aggLog.latest_action}</TableCell>
+                            <TableCell className="text-teal-300">{new Date(aggLog.latest_timestamp).toLocaleString()}</TableCell>
                             <TableCell>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => toggleExpand(aggLog.student_id)}
+                                className="text-teal-400 hover:text-teal-300"
                               >
                                 {expandedStudents.has(aggLog.student_id) ? (
                                   <ChevronUp className="h-4 w-4" />
@@ -417,9 +420,9 @@ export default function MonitoringPage() {
                           </TableRow>
                           {expandedStudents.has(aggLog.student_id) && (
                             aggLog.all_logs.map((log) => (
-                              <TableRow key={log.id} className="bg-gray-50">
-                                <TableCell colSpan={2} className="pl-8">{log.action}</TableCell>
-                                <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
+                              <TableRow key={log.id} className="bg-gray-800/50">
+                                <TableCell colSpan={2} className="pl-8 text-teal-300">{log.action}</TableCell>
+                                <TableCell className="text-teal-300">{new Date(log.timestamp).toLocaleString()}</TableCell>
                                 <TableCell></TableCell>
                               </TableRow>
                             ))

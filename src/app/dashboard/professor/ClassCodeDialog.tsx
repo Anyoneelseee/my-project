@@ -1,11 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 interface ClassCodeDialogProps {
@@ -17,21 +10,18 @@ interface ClassCodeDialogProps {
 export function ClassCodeDialog({ isOpen, onOpenChange, classCode }: ClassCodeDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-white rounded-xl shadow-2xl p-6 max-w-md">
+      <DialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl shadow-2xl p-6 max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-gray-900">
+          <DialogTitle className="text-2xl font-semibold text-teal-400">
             Class Created Successfully!
-            {/* Customize title text color (text-gray-900) in className */}
           </DialogTitle>
-          <DialogDescription className="text-gray-600 mt-2">
+          <DialogDescription className="text-gray-200 mt-2">
             Share this class code with your students so they can join the class.
-            {/* Customize description text color (text-gray-600) in className */}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
           <p
-            className="text-center text-xl font-bold text-purple-700 bg-purple-50 px-4 py-2 rounded-lg"
-            // Customize class code text color (text-purple-700) and background (bg-purple-50) in className
+            className="text-center text-xl font-bold text-teal-300 bg-gray-700/50 px-4 py-2 rounded-lg"
           >
             {classCode}
           </p>
@@ -42,15 +32,13 @@ export function ClassCodeDialog({ isOpen, onOpenChange, classCode }: ClassCodeDi
               navigator.clipboard.writeText(classCode);
               alert("Class code copied to clipboard!");
             }}
-            className="w-full sm:w-auto bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg transition-colors"
-            // Customize button background color (bg-purple-600) and hover color (hover:bg-purple-700) in className
+            className="w-full sm:w-auto bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition-colors"
           >
             Copy Code
           </Button>
           <Button
             onClick={() => onOpenChange(false)}
-            className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-900 font-semibold py-2 rounded-lg transition-colors"
-            // Customize button background color (bg-gray-200) and hover color (hover:bg-gray-300) in className
+            className="w-full sm:w-auto bg-gray-700/50 hover:bg-gray-600 text-gray-200 font-semibold py-2 rounded-lg transition-colors"
           >
             Close
           </Button>

@@ -215,141 +215,148 @@ export default function ClassDetailsPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
   }
 
   if (!classData) {
-    return <div className="flex items-center justify-center h-screen text-gray-500">Class not found.</div>;
+    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Class not found.</div>;
   }
 
   return (
     <SidebarProvider>
       <ProfessorSidebar classes={[{ id: classId as string, name: classData.name, section: classData.section, course: classData.course, code: classData.code }]} />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b bg-white shadow-sm">
-          <SidebarTrigger className="-ml-1 text-gray-600 hover:text-gray-900" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+          <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
+          <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors">
+                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
                   Home
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage className="text-gray-900 text-sm font-medium">{classData.name}</BreadcrumbPage>
+                <BreadcrumbPage className="text-teal-400 text-sm font-medium">{classData.name}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex-1 p-6 bg-gray-100">
-          <div className="max-w-7xl mx-auto space-y-8">
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-2xl font-semibold text-gray-900">{classData.name}</CardTitle>
+        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
+          <div className="max-w-7xl mx-auto space-y-6">
+            {/* Class Details */}
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20">
+                <CardTitle className="text-2xl font-semibold text-teal-400">{classData.name}</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6 space-y-4">
+              <CardContent className="pt-4 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6">
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Section</p>
-                    <p className="text-lg font-semibold text-gray-900">{classData.section}</p>
+                    <p className="text-sm font-medium text-teal-300">Section</p>
+                    <p className="text-lg font-semibold text-teal-400">{classData.section}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Course</p>
-                    <p className="text-lg font-semibold text-gray-900">{classData.course}</p>
+                    <p className="text-sm font-medium text-teal-300">Course</p>
+                    <p className="text-lg font-semibold text-teal-400">{classData.course}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Class Code</p>
-                    <p className="text-lg font-semibold text-gray-900">{classData.code}</p>
+                    <p className="text-sm font-medium text-teal-300">Class Code</p>
+                    <p className="text-lg font-semibold text-teal-400">{classData.code}</p>
                   </div>
                 </div>
                 <Button
                   onClick={() => setIsActivityDialogOpen(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-6 py-2 transition-colors"
+                  className="bg-teal-500 hover:bg-teal-600 text-white rounded-lg px-6 py-2 transition-colors"
                 >
                   Create Activity
                 </Button>
               </CardContent>
             </Card>
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-xl font-semibold text-gray-900">Enrolled Students</CardTitle>
+
+            {/* Enrolled Students */}
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20">
+                <CardTitle className="text-xl font-semibold text-teal-400">Enrolled Students</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4">
                 {students.length === 0 ? (
-                  <p className="text-gray-500 text-center">No students have joined this class.</p>
+                  <p className="text-teal-300 text-center">No students have joined this class.</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {students.map((student) => (
-                      <Card key={student.student_id} className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                        <CardContent className="p-4">
-                          <p className="font-semibold text-gray-900">{student.first_name} {student.last_name}</p>
-                          <p className="text-sm text-gray-500">Section: {student.section}</p>
-                        </CardContent>
-                      </Card>
+                      <div
+                        key={student.student_id}
+                        className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
+                      >
+                        <p className="font-semibold text-teal-400">{student.first_name} {student.last_name}</p>
+                        <p className="text-sm text-teal-300">Section: {student.section}</p>
+                      </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-xl font-semibold text-gray-900">Activities</CardTitle>
+
+            {/* Activities */}
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20">
+                <CardTitle className="text-xl font-semibold text-teal-400">Activities</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4">
                 {activities.length === 0 ? (
-                  <p className="text-gray-500 text-center">No activities created yet.</p>
+                  <p className="text-teal-300 text-center">No activities created yet.</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {activities.map((activity) => (
-                      <Card key={activity.id} className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow">
-                        <CardContent className="p-4 space-y-2">
-                          <p className="font-semibold text-gray-900">{activity.description}</p>
-                          {activity.image_url && (
-                            <Image
-                              src={activity.image_url}
-                              alt="Activity"
-                              width={300}
-                              height={200}
-                              className="rounded-md w-full max-w-xs"
-                            />
-                          )}
-                          <p className="text-sm text-gray-500">
-                            Created at: {new Date(activity.created_at).toLocaleString()}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div
+                        key={activity.id}
+                        className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
+                      >
+                        <p className="font-semibold text-teal-400">{activity.description}</p>
+                        {activity.image_url && (
+                          <Image
+                            src={activity.image_url}
+                            alt="Activity"
+                            width={200}
+                            height={150}
+                            className="rounded-md w-full max-w-[200px] h-auto mt-2"
+                          />
+                        )}
+                        <p className="text-sm text-teal-300">
+                          Created at: {new Date(activity.created_at).toLocaleString()}
+                        </p>
+                      </div>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-            <Card className="border-none shadow-lg bg-white rounded-xl">
-              <CardHeader className="border-b border-gray-200">
-                <CardTitle className="text-xl font-semibold text-gray-900">Student Submissions</CardTitle>
+
+            {/* Student Submissions */}
+            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+              <CardHeader className="border-b border-teal-500/20">
+                <CardTitle className="text-xl font-semibold text-teal-400">Student Submissions</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4">
                 {submissions.length === 0 ? (
-                  <p className="text-gray-500 text-center">No submissions yet.</p>
+                  <p className="text-teal-300 text-center">No submissions yet.</p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {submissions.map((submission) => (
                       <Link
                         key={`${submission.student_id}-${submission.file_name}`}
                         href={`/dashboard/professor/${classId}/submissions/${encodeURIComponent(`${submission.student_id}/${submission.file_name}`)}`}
                       >
-                        <Card
-                          className="border border-gray-200 rounded-lg shadow-sm hover:shadow-md hover:bg-gray-50 transition-shadow transition-colors cursor-pointer"
+                        <div
+                          className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors cursor-pointer"
                         >
-                          <CardContent className="p-4 space-y-1">
-                            <p className="font-semibold text-gray-900">{submission.student_name}</p>
-                            <p className="text-sm text-gray-500">File: {submission.file_name}</p>
-                            <p className="text-sm text-gray-500">
-                              Submitted: {new Date(submission.submitted_at).toLocaleString()}
-                            </p>
-                          </CardContent>
-                        </Card>
+                          <p className="font-semibold text-teal-400">{submission.student_name}</p>
+                          <p className="text-sm text-teal-300">File: {submission.file_name}</p>
+                          <p className="text-sm text-teal-300">
+                            Submitted: {new Date(submission.submitted_at).toLocaleString()}
+                          </p>
+                        </div>
                       </Link>
                     ))}
                   </div>

@@ -1,3 +1,4 @@
+// src/components/professor-sidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -6,7 +7,8 @@ import {
   BarChart2,
   SquareTerminal,
   PlusCircle,
-  LineChart, // Added for Analytics icon
+  LineChart,
+  Upload, // Added for Bulk AI Checker icon
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
@@ -46,7 +48,6 @@ export function ProfessorSidebar({
           console.error("Failed to fetch user:", error?.message);
           return;
         }
-        // Fetch additional user details from the users table
         const { data: userData, error: userError } = await supabase
           .from("users")
           .select("first_name, last_name")
@@ -106,13 +107,17 @@ export function ProfessorSidebar({
           url: `/dashboard/professor/analytics/${cls.id}`,
         })),
       },
+      {
+        title: "Bulk AI Checker",
+        url: "/dashboard/professor/bulk-ai-checker",
+        icon: Upload,
+      },
     ],
   };
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-      </SidebarHeader>
+      <SidebarHeader></SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
       </SidebarContent>

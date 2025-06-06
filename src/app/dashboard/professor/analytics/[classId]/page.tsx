@@ -18,6 +18,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { Button } from "@/components/ui/button"; // Import Button for return functionality
 
 // Pie chart data for student enrollment (dummy data)
 const enrollmentChartData = [
@@ -89,6 +90,17 @@ export default function AnalyticsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {/* Header with Return Button */}
+      <div className="flex items-center justify-between mb-6">
+        <Button
+          variant="outline"
+          onClick={() => window.history.back()} // Navigate back to the previous page
+          className="text-teal-600 hover:text-teal-700 hover:bg-teal-100 transition-colors"
+        >
+          ← Return
+        </Button>
+      </div>
+
       {/* Enrollment Pie Chart */}
       <Card className="flex flex-col">
         <CardHeader className="items-center pb-0">
