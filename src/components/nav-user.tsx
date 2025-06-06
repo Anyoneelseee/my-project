@@ -53,71 +53,73 @@ export function NavUser({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleLogout = () => {
-    // Clear user session
     localStorage.removeItem("authToken");
-    // Redirect to login page
     router.push("/login");
   };
 
   return (
     <>
-      <SidebarMenu>
-        <SidebarMenuItem>
+      <SidebarMenu className="bg-transparent">
+        <SidebarMenuItem className="bg-transparent">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                className="bg-transparent data-[state=open]:bg-teal-500/20 data-[state=open]:text-teal-400"
               >
-                <Avatar className="h-8 w-8 rounded-lg">
+                <Avatar className="h-8 w-8 rounded-lg bg-gray-700">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg text-gray-200">
+                    {user.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+                  <span className="truncate font-medium text-gray-200">{user.name}</span>
+                  <span className="truncate text-xs text-gray-400">{user.email}</span>
                 </div>
-                <ChevronsUpDown className="ml-auto size-4" />
+                <ChevronsUpDown className="ml-auto size-4 text-gray-400" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+              className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20"
               side={isMobile ? "bottom" : "right"}
               align="end"
               sideOffset={4}
             >
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar className="h-8 w-8 rounded-lg">
+                  <Avatar className="h-8 w-8 rounded-lg bg-gray-700">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarFallback className="rounded-lg text-gray-200">
+                      {user.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
-                    <span className="truncate text-xs">{user.email}</span>
+                    <span className="truncate font-medium text-gray-200">{user.name}</span>
+                    <span className="truncate text-xs text-gray-400">{user.email}</span>
                   </div>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <Settings2 />
+                <DropdownMenuItem className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                  <Settings2 className="mr-2" />
                   Settings
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <Bell />
+                <DropdownMenuItem className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                  <Bell className="mr-2" />
                   Notifications
                 </DropdownMenuItem>
               </DropdownMenuGroup>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuItem
                 onClick={() => setIsDialogOpen(true)}
-                className="cursor-pointer"
+                className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
               >
-                <LogOut />
+                <LogOut className="mr-2" />
                 Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -125,20 +127,27 @@ export function NavUser({
         </SidebarMenuItem>
       </SidebarMenu>
 
-      {/* Logout Confirmation Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20">
           <DialogHeader>
-            <DialogTitle>Confirm Logout</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-teal-400">Confirm Logout</DialogTitle>
+            <DialogDescription className="text-gray-200">
               Are you sure you want to log out? You will need to sign in again.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              className="bg-gray-700/50 text-gray-200 border-gray-600 hover:bg-gray-600"
+            >
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleLogout}>
+            <Button
+              variant="destructive"
+              onClick={handleLogout}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
               Logout
             </Button>
           </DialogFooter>

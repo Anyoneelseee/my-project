@@ -46,44 +46,23 @@ interface Class {
 // Redesign ClassCard Component
 function ClassCard({ classData }: { classData: Class }) {
   return (
-    <Card
-      className="shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden"
-      style={{ backgroundColor: "#061A40" }} // Customize background color here
-    >
-      <CardHeader
-        className="p-4 rounded-t-xl"
-        style={{ backgroundColor: "#061A40" }} // Customize header background color here (matches card background for consistency)
-      >
-        <CardTitle
-          className="text-xl md:text-2xl font-bold truncate"
-          style={{ color: "#B9D6F2" }} // Customize title text color here
-        >
+    <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 hover:shadow-xl transition-all duration-200 h-[250px] flex flex-col justify-between overflow-hidden rounded-xl">
+      <CardHeader className="p-4">
+        <CardTitle className="text-xl md:text-2xl font-extrabold truncate text-teal-400">
           {classData.name}
         </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
         <div className="space-y-2">
-          <p
-            className="text-sm md:text-base"
-            style={{ color: "#B9D6F2" }} // Customize body text color here
-          >
+          <p className="text-sm md:text-base text-gray-200">
             Section: {classData.section}
           </p>
-          <p
-            className="text-sm md:text-base"
-            style={{ color: "#B9D6F2" }} // Customize body text color here
-          >
+          <p className="text-sm md:text-base text-gray-200">
             Course: {classData.course}
           </p>
         </div>
         <div className="mt-4">
-          <p
-            className="text-sm md:text-base font-semibold px-3 py-1 rounded-full inline-block"
-            style={{
-              color: "#B9D6F2", // Customize class code text color here
-              backgroundColor: "#0353A4", // Customize class code background color here
-            }}
-          >
+          <p className="text-sm md:text-base font-semibold px-3 py-1 rounded-full inline-block bg-teal-500/20 text-teal-300">
             Code: {classData.code}
           </p>
         </div>
@@ -241,50 +220,46 @@ export default function StudentDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+        <div className="text-xl font-semibold text-gray-200">Loading...</div>
       </div>
     );
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="bg-transparent">
       <StudentSidebar classes={classes} />
-      <SidebarInset>
-        <header className="flex h-16 items-center justify-between px-6 bg-white shadow-sm border-b">
+      <SidebarInset className="bg-transparent">
+        <header className="flex h-16 items-center justify-between px-6 bg-gradient-to-br from-gray-800 to-gray-900 border-b border-teal-500/20">
           <div className="flex items-center gap-4">
-            <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors" />
+            <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-gray-200" />
             <Breadcrumb>
               <BreadcrumbList className="text-sm">
                 <BreadcrumbItem>
                   <BreadcrumbLink
                     href="/dashboard/student"
-                    className="text-blue-600 hover:underline"
-                    // Customize link color (text-blue-600) in className
+                    className="text-teal-400 hover:text-teal-300 transition-colors"
                   >
                     Student Dashboard
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator className="mx-2 text-gray-400" />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-gray-900">
+                  <BreadcrumbPage className="text-gray-200">
                     Home
-                    {/* Customize page text color (text-gray-900) in className */}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           </div>
         </header>
-        <div className="p-6">
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200 p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Join a Class Card */}
-            <Card className="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
-              {/* Customize card background gradient (from-blue-50 to-white) and border color (border-blue-200) in className */}
+            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 hover:shadow-xl transition-all duration-200 h-[250px] flex flex-col justify-between overflow-hidden rounded-xl">
               <CardHeader className="flex-1 flex items-center justify-center p-4">
-                <CardTitle className="text-center text-blue-800 font-bold text-xl md:text-2xl">
+                <CardTitle className="text-center text-teal-400 font-extrabold text-xl md:text-2xl">
                   Join a Class
-                  {/* Customize title text color (text-blue-800) in className */}
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-4 pt-0">
@@ -292,30 +267,26 @@ export default function StudentDashboard() {
                   <DialogTrigger asChild>
                     <Button
                       variant="default"
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl py-2 transition-colors flex items-center justify-center gap-2 shadow-md"
-                      // Customize button background color (bg-blue-600) and hover color (hover:bg-blue-700) in className
+                      className="w-full bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold rounded-xl py-2 transition-all duration-200 flex items-center justify-center gap-2 shadow-md"
                     >
                       <Plus className="w-5 h-5" />
                       Join Class
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-white rounded-xl shadow-2xl p-6 max-w-md">
+                  <DialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl p-6 max-w-md">
                     <DialogHeader>
-                      <DialogTitle className="text-2xl font-semibold text-gray-900">
+                      <DialogTitle className="text-2xl font-extrabold text-teal-400">
                         Join a Class
-                        {/* Customize title text color (text-gray-900) in className */}
                       </DialogTitle>
-                      <DialogDescription className="text-gray-600 mt-2">
+                      <DialogDescription className="text-gray-200 mt-2">
                         Enter the class code provided by your professor to join.
-                        {/* Customize description text color (text-gray-600) in className */}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-1 gap-2">
                         <Label
                           htmlFor="code"
-                          className="text-sm font-medium text-gray-700"
-                          // Customize label text color (text-gray-700) in className
+                          className="text-sm font-medium text-gray-200"
                         >
                           Class Code
                         </Label>
@@ -324,17 +295,15 @@ export default function StudentDashboard() {
                           value={classCode}
                           onChange={(e) => setClassCode(e.target.value)}
                           placeholder="Enter class code"
-                          className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full p-2 bg-gray-700/50 border-gray-600 text-gray-200 placeholder-gray-400 focus:border-teal-500 rounded-lg"
                           autoFocus
-                          // Customize input border (border-gray-300) and focus ring (focus:ring-blue-500) in className
                         />
                       </div>
                     </div>
                     <DialogFooter>
                       <Button
                         onClick={handleJoinClass}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition-colors"
-                        // Customize button background color (bg-blue-600) and hover color (hover:bg-blue-700) in className
+                        className="w-full bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold py-2 rounded-lg transition-all duration-200"
                       >
                         Join
                       </Button>

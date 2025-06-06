@@ -158,7 +158,8 @@ const Playground: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto bg-gray-50 text-gray-900">
+    <div className="p-6 max-w-7xl mx-auto min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200">
+      {/* API Limit Dialog */}
       <Transition appear show={showApiLimitDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
           <Transition.Child
@@ -184,17 +185,17 @@ const Playground: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">
                     API Limit Reached
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       You’ve reached the maximum number of code execution requests (50 per day). Please wait 24
                       hours to run more code. For concerns or inquiries, contact the developer at:
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-blue-600 hover:underline ml-1"
+                        className="text-teal-400 hover:underline ml-1"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>
@@ -203,7 +204,7 @@ const Playground: React.FC = () => {
                   <div className="mt-4">
                     <button
                       type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
                       onClick={() => setShowApiLimitDialog(false)}
                     >
                       Understood
@@ -216,6 +217,7 @@ const Playground: React.FC = () => {
         </Dialog>
       </Transition>
 
+      {/* Connection Error Dialog */}
       <Transition appear show={showConnectionErrorDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowConnectionErrorDialog(false)}>
           <Transition.Child
@@ -241,17 +243,17 @@ const Playground: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">
                     Connection Error
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       {connectionErrorMessage} Please check your internet connection and try again. If the issue
                       persists, contact support at:
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-blue-600 hover:underline ml-1"
+                        className="text-teal-400 hover:underline ml-1"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>
@@ -273,6 +275,7 @@ const Playground: React.FC = () => {
         </Dialog>
       </Transition>
 
+      {/* Unsupported Language Dialog */}
       <Transition appear show={showUnsupportedLanguageDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowUnsupportedLanguageDialog(false)}>
           <Transition.Child
@@ -298,16 +301,16 @@ const Playground: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">
                     Unsupported Language
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       The language &apos;{language}&apos; is not supported. Currently supported languages are:
                       <ul className="list-disc list-inside mt-2">
                         {supportedLanguages.map((lang) => (
-                          <li key={lang} className="text-gray-600">{lang}</li>
+                          <li key={lang} className="text-gray-200">{lang}</li>
                         ))}
                       </ul>
                     </p>
@@ -328,10 +331,11 @@ const Playground: React.FC = () => {
         </Dialog>
       </Transition>
 
-      <div className="flex justify-end items-center mb-6">
+      {/* Return Button Moved to the Left */}
+      <div className="flex justify-start items-center mb-6">
         <button
           onClick={handleReturn}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg shadow-md hover:from-indigo-600 hover:to-purple-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
+          className="inline-flex items-center px-4 py-2 bg-gradient-to-br from-teal-500 to-blue-600 text-white font-semibold rounded-lg shadow-md hover:from-teal-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-all duration-200"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -346,14 +350,14 @@ const Playground: React.FC = () => {
         </button>
       </div>
 
-      <Card className="shadow-lg border-none rounded-xl bg-white">
-        <CardHeader className="border-b border-gray-200">
-          <CardTitle className="text-2xl font-semibold text-gray-900">Interactive Code Editing</CardTitle>
+      <Card className="shadow-lg border-teal-500/20 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900">
+        <CardHeader className="border-b border-gray-600/30">
+          <CardTitle className="text-2xl font-semibold text-teal-400">Interactive Code Editing</CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-6">
             <div>
-              <Label className="text-sm font-medium text-gray-900">Select Language</Label>
+              <Label className="text-sm font-medium text-gray-200">Select Language</Label>
               <select
                 value={language}
                 onChange={(e) => {
@@ -361,7 +365,7 @@ const Playground: React.FC = () => {
                   setOutput([]);
                   setError([]);
                 }}
-                className="w-40 p-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 bg-white"
+                className="w-40 p-2 border border-gray-600 rounded-lg text-gray-200 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50 bg-gray-700/50"
                 disabled={isRunning}
               >
                 <option value="python">Python</option>
@@ -372,7 +376,7 @@ const Playground: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Label className="text-sm font-medium text-gray-900">Code Editor</Label>
+                <Label className="text-sm font-medium text-gray-200">Code Editor</Label>
                 <AceEditor
                   mode={
                     language === "cpp" || language === "c"
@@ -381,7 +385,7 @@ const Playground: React.FC = () => {
                       ? "java"
                       : "python"
                   }
-                  theme="vertical"
+                  theme="monokai"
                   value={code}
                   onChange={(newCode) => setCode(newCode)}
                   name="code-editor"
@@ -402,23 +406,23 @@ const Playground: React.FC = () => {
                   <Button
                     onClick={handleCompile}
                     disabled={isRunning || !code.trim()}
-                    className="w-1/2 bg-[#5d659b] hover:bg-[#4f57a5] text-white rounded-lg shadow-md transition-all duration-200"
+                    className="w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg shadow-md transition-all duration-200"
                   >
                     {isRunning ? "Running..." : "Compile and Run"}
                   </Button>
                   <Button
                     onClick={handleSave}
                     disabled={isRunning || !code.trim()}
-                    className="w-1/2 bg-[#e4e5e8] hover:bg-[#d1d3d6] text-gray-900 rounded-lg shadow-md transition-all duration-200"
+                    className="w-1/2 bg-gray-700/50 hover:bg-gray-600 text-gray-200 rounded-lg shadow-md transition-all duration-200"
                   >
                     Save
                   </Button>
                 </div>
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-900">Output</Label>
+                <Label className="text-sm font-medium text-gray-200">Output</Label>
                 <div
-                  className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
+                  className="p-4 bg-gradient-to-br from-gray-800 to-gray-900 text-gray-200 rounded-lg overflow-y-auto border-teal-500/20"
                   style={{ width: "100%", height: "500px", whiteSpace: "pre-wrap" }}
                 >
                   {output.length === 0 && error.length === 0 && !isRunning && (

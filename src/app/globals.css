@@ -116,6 +116,25 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+[data-sidebar="sidebar"] {
+  background: linear-gradient(to bottom right, #1f2937, #111827) !important;
+}
+
+[data-sidebar="menu"],
+[data-sidebar="menu-item"],
+[data-sidebar="menu-button"],
+[data-sidebar="menu-sub"],
+[data-sidebar="menu-sub-item"] {
+  background: transparent !important;
+  color: #e5e7eb !important;
+}
+[data-sidebar="menu-button"]:hover,
+[data-sidebar="menu-sub-button"]:hover {
+  background: rgba(4, 120, 87, 0.2) !important;
+  color: #2dd4bf !important;
+}
+
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

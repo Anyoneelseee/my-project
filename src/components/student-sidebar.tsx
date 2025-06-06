@@ -47,7 +47,6 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
           console.error("Failed to fetch user:", error?.message);
           return;
         }
-        // Fetch additional user details from the users table
         const { data: userData, error: userError } = await supabase
           .from("users")
           .select("first_name, last_name")
@@ -102,16 +101,19 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
   };
 
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-      </SidebarHeader>
-      <SidebarContent>
+    <Sidebar
+      collapsible="icon"
+      className="bg-transparent [&[data-slot=sidebar-container]]:bg-gradient-to-br [&[data-slot=sidebar-container]]:from-gray-800 [&[data-slot=sidebar-container]]:to-gray-900 [&[data-slot=sidebar-container]]:border-r [&[data-slot=sidebar-container]]:border-teal-500/20 [&[data-slot=sidebar-inner]]:bg-gradient-to-br [&[data-slot=sidebar-inner]]:from-gray-800 [&[data-slot=sidebar-inner]]:to-gray-900"
+      {...props}
+    >
+      <SidebarHeader className="bg-transparent" />
+      <SidebarContent className="bg-transparent">
         <NavMain items={data.navMain} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="bg-transparent">
         <NavUser user={data.user} />
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail className="bg-transparent hover:bg-teal-500/20" />
     </Sidebar>
   );
 }

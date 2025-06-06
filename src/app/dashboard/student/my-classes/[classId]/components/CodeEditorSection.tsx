@@ -7,14 +7,14 @@ import { Button } from "@/components/ui/button";
 import AceEditor from "react-ace";
 import { supabase } from "@/lib/supabase";
 import "ace-builds/src-noconflict/mode-python";
-import "ace-builds/src-noconflict/mode-c_cpp"; // Supports both C and C++
+import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/mode-java";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
 import { Dialog, Transition } from "@headlessui/react";
 
 export default function CodeEditorSection({ classId }: { classId: string }) {
-  const [code, setCode] = useState<string>("// Write your code here\nconsole.log('Hello, World!');");
+  const [code, setCode] = useState<string>("");
   const [output, setOutput] = useState<string[]>([]);
   const [language, setLanguage] = useState<string>("python");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -32,10 +32,10 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const languageIdMap: { [key: string]: number } = {
-    python: 71, // Python 3
-    cpp: 54,    // C++
-    c: 50,      // C
-    java: 62,   // Java
+    python: 71,
+    cpp: 54,
+    c: 50,
+    java: 62,
   };
 
   const supportedLanguages = Object.keys(languageIdMap);
@@ -305,8 +305,8 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
     try {
       setIsSubmitting(true);
       const editorValue = editorRef.current?.editor.getValue();
-      const code = editorValue ?? ""; // Fallback to empty string if ref fails
-      console.log("Editor value:", editorValue, "Code state:", code); // Debug log
+      const code = editorValue ?? "";
+      console.log("Editor value:", editorValue, "Code state:", code);
       const fileExtension = language === "python" ? "py" : language === "cpp" ? "cpp" : language === "c" ? "c" : "java";
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
@@ -391,9 +391,8 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
     }, 5000);
   };
 
-  
   return (
-    <div className="p-6 max-w-7xl mx-auto bg-gray-50 text-gray-900">
+    <div className="p-6 max-w-7xl mx-auto text-white">
       <Transition appear show={showApiLimitDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
           <Transition.Child
@@ -419,17 +418,17 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-extrabold text-teal-400">
                     API Limit Reached
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       You’ve reached the maximum number of code execution requests (50 per day). Please wait 24
                       hours to run more code. For concerns or inquiries, contact the developer at:
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-blue-600 hover:underline ml-1"
+                        className="text-teal-400 hover:text-teal-300 ml-1 transition-colors"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>
@@ -438,7 +437,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   <div className="mt-4">
                     <button
                       type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      className="w-full inline-flex justify-center rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 px-4 py-2 text-sm font-medium text-white focus:outline-none transition-all duration-200"
                       onClick={() => setShowApiLimitDialog(false)}
                     >
                       Understood
@@ -476,17 +475,17 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-extrabold text-teal-400">
                     Connection Error
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       {connectionErrorMessage} Please check your internet connection and try again. If the issue
                       persists, contact support at:
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-blue-600 hover:underline ml-1"
+                        className="text-teal-400 hover:text-teal-300 ml-1 transition-colors"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>
@@ -495,7 +494,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   <div className="mt-4">
                     <button
                       type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                      className="w-full inline-flex justify-center rounded-lg bg-red-600 hover:bg-red-700 px-4 py-2 text-sm font-medium text-white focus:outline-none transition-all duration-200"
                       onClick={() => setShowConnectionErrorDialog(false)}
                     >
                       Close
@@ -533,16 +532,16 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-extrabold text-teal-400">
                     Unsupported Language
                   </Dialog.Title>
                   <div className="mt-2">
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-200">
                       The language &apos;{language}&apos; is not supported. Currently supported languages are:
                       <ul className="list-disc list-inside mt-2">
                         {supportedLanguages.map((lang) => (
-                          <li key={lang} className="text-gray-600">{lang}</li>
+                          <li key={lang} className="text-gray-200">{lang}</li>
                         ))}
                       </ul>
                     </p>
@@ -550,7 +549,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   <div className="mt-4">
                     <button
                       type="button"
-                      className="w-full inline-flex justify-center rounded-md border border-transparent bg-yellow-600 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                      className="w-full inline-flex justify-center rounded-lg bg-yellow-600 hover:bg-yellow-700 px-4 py-2 text-sm font-medium text-white focus:outline-none transition-all duration-200"
                       onClick={() => setShowUnsupportedLanguageDialog(false)}
                     >
                       OK
@@ -563,16 +562,14 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
         </Dialog>
       </Transition>
 
-  
-
-      <Card className="shadow-lg border-none rounded-xl bg-white">
-        <CardHeader className="border-b border-gray-200">
-          <CardTitle className="text-2xl font-semibold text-gray-900">Interactive Monitoring Code Editor</CardTitle>
+      <Card className="border-none rounded-xl bg-gradient-to-br from-gray-800 to-gray-900">
+        <CardHeader>
+          <CardTitle className="text-2xl font-extrabold text-teal-400">Interactive Monitoring Code Editor</CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-6">
             <div>
-              <Label className="text-sm font-medium text-gray-900">Select Language</Label>
+              <Label className="text-sm font-medium text-gray-200">Select Language</Label>
               <select
                 value={language}
                 onChange={(e) => {
@@ -580,7 +577,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   setOutput([]);
                   setError([]);
                 }}
-                className="w-40 p-2 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 bg-white"
+                className="w-40 p-2 bg-gray-700/50 border-gray-600 text-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50"
                 disabled={isRunning}
               >
                 <option value="python">Python</option>
@@ -591,7 +588,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Label className="text-sm font-medium text-gray-900">Code Editor</Label>
+                <Label className="text-sm font-medium text-gray-200">Code Editor</Label>
                 <AceEditor
                   mode={
                     language === "cpp" || language === "c"
@@ -616,36 +613,36 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   }}
                   style={{ width: "100%", height: "500px", borderRadius: "8px" }}
                   readOnly={isRunning}
-                  ref={editorRef} // Ensure ref is correctly attached
+                  ref={editorRef}
                 />
                 <div className="flex gap-4 mt-4">
                   <Button
                     onClick={handleCompile}
                     disabled={isRunning || !code.trim()}
-                    className="w-1/2 bg-[#5d659b] hover:bg-[#4f57a5] text-white rounded-lg shadow-md transition-all duration-200"
+                    className="w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200"
                   >
                     {isRunning ? "Running..." : "Compile and Run"}
                   </Button>
                   <Button
                     onClick={handleSaveCode}
                     disabled={isRunning || !code.trim()}
-                    className="w-1/2 bg-[#e4e5e8] hover:bg-[#d1d3d6] text-gray-900 rounded-lg shadow-md transition-all duration-200"
+                    className="w-1/2 bg-gray-700/50 hover:bg-gray-600 text-white rounded-lg transition-all duration-200"
                   >
                     Save
                   </Button>
                 </div>
               </div>
               <div>
-                <Label className="text-sm font-medium text-gray-900">Output</Label>
+                <Label className="text-sm font-medium text-gray-200">Output</Label>
                 <div
-                  className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
+                  className="p-4 bg-gray-900/50 rounded-lg overflow-y-auto border border-gray-600"
                   style={{ width: "100%", height: "500px", whiteSpace: "pre-wrap" }}
                 >
                   {output.length === 0 && error.length === 0 && !isRunning && (
                     <pre className="text-gray-400">Run the code to see the output.</pre>
                   )}
                   {output.map((line, index) => (
-                    <div key={index} className="flex items-center">
+                    <div key={index} className="flex items-center text-gray-200">
                       <span>{line}</span>
                     </div>
                   ))}
@@ -660,7 +657,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 <Button
                   onClick={handleSubmitActivity}
                   disabled={isSubmitting || !section || isRunning}
-                  className="bg-[#5d659b] hover:bg-[#4f57a5] text-white rounded-lg shadow-md transition-all duration-200"
+                  className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200"
                 >
                   Submit Activity
                 </Button>
@@ -669,17 +666,17 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                 <input
                   type="file"
                   onChange={handleFileChange}
-                  className="p-2 border border-gray-300 rounded-lg w-full text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 bg-white"
+                  className="p-2 bg-gray-700/50 border-gray-600 text-gray-200 rounded-lg w-full focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50"
                   accept=".py,.cpp,.c,.java"
                   disabled={isSubmitting || isRunning}
                 />
               </div>
               {submissions.length > 0 && (
                 <div>
-                  <Label className="text-sm font-medium text-gray-900">Previous Submissions</Label>
+                  <Label className="text-sm font-medium text-gray-200">Previous Submissions</Label>
                   <ul className="list-disc pl-5 mt-2">
                     {submissions.map((file) => (
-                      <li key={file} className="text-gray-600">{file}</li>
+                      <li key={file} className="text-gray-400">{file}</li>
                     ))}
                   </ul>
                 </div>

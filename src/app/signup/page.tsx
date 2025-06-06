@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, FormEvent } from "react";
+import React, { useState, FormEvent, useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,118 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import Link from "next/link";
+
+// Define Particle interface
+interface Particle {
+  draw(): unknown;
+  update(): unknown;
+  x: number;
+  y: number;
+  size: number;
+  speedX: number;
+  speedY: number;
+}
+
+// Particle Background Component
+const ParticleBackground = () => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const particlesArray: Particle[] = [];
+    const numberOfParticles = 100;
+    let mouseX = 0;
+    let mouseY = 0;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+
+    class ParticleClass implements Particle {
+      x: number;
+      y: number;
+      size: number;
+      speedX: number;
+      speedY: number;
+
+      constructor() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.size = Math.random() * 3 + 1;
+        this.speedX = Math.random() * 2 - 1;
+        this.speedY = Math.random() * 2 - 1;
+      }
+
+      update() {
+        const dx = this.x - mouseX;
+        const dy = this.y - mouseY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const maxDistance = 100;
+        if (distance < maxDistance) {
+          const force = (maxDistance - distance) / maxDistance;
+          this.x += (dx / distance) * force * 3;
+          this.y += (dy / distance) * force * 3;
+        }
+
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x > canvas.width) this.x = 0;
+        if (this.x < 0) this.x = canvas.width;
+        if (this.y > canvas.height) this.y = 0;
+        if (this.y < 0) this.y = canvas.height;
+      }
+
+      draw() {
+        if (!ctx) return;
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
+        gradient.addColorStop(0, "#40C4FF"); // Teal-blue accent
+        gradient.addColorStop(1, "#00ADB5"); // Darker teal
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < numberOfParticles; i++) {
+      particlesArray.push(new ParticleClass());
+    }
+
+    const animate = () => {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particlesArray.length; i++) {
+        particlesArray[i].update();
+        particlesArray[i].draw();
+      }
+      requestAnimationFrame(animate);
+    };
+    animate();
+
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full z-0" />;
+};
 
 export default function SignupFormDemo() {
   const router = useRouter();
@@ -70,117 +182,178 @@ export default function SignupFormDemo() {
   };
 
   return (
-    <div className="shadow-input mx-auto w-full max-w-md rounded-none bg-white p-4 md:rounded-2xl md:p-8 dark:bg-black">
-      <h2 className="text-xl font-bold text-neutral-800 dark:text-neutral-200">Carma</h2>
-      <p className="mt-2 max-w-sm text-sm text-neutral-600 dark:text-neutral-300">
-        Welcome to Carma! Make sure to create your account properly.
-      </p>
+    <div className="min-h-svh relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+      {/* Particle Background */}
+      <ParticleBackground />
 
-      <form className="my-8" onSubmit={handleSubmit}>
-        <div className="mb-4 flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2">
-          <LabelInputContainer>
-            <Label htmlFor="firstname">First name</Label>
-            <Input
-              id="firstname"
-              placeholder="Tyler"
-              type="text"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              required
-            />
-          </LabelInputContainer>
-          <LabelInputContainer>
-            <Label htmlFor="lastname">Last name</Label>
-            <Input
-              id="lastname"
-              placeholder="Durden"
-              type="text"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              required
-            />
-          </LabelInputContainer>
+      {/* Header with Logo */}
+      <header className="p-6 md:p-10 z-10 relative flex justify-center">
+        <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-teal-400">
+          <Image
+            src="/carmalogo.png"
+            alt="Carma Logo"
+            width={32}
+            height={32}
+            className="rounded-full"
+          />
+          Carma
+        </Link>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative">
+        <div className="bg-gray-800/90 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-teal-500/20 w-full max-w-md">
+          <h2 className="text-3xl font-extrabold text-center text-teal-400 mb-6">Create Account</h2>
+          <p className="text-gray-400 text-center mb-8">
+            Join Carma and start your journey with advanced AI tools.
+          </p>
+
+          <form className="my-8" onSubmit={handleSubmit}>
+            <div className="mb-6 flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
+              <LabelInputContainer>
+                <Label htmlFor="firstname" className="text-sm text-gray-300">First Name</Label>
+                <Input
+                  id="firstname"
+                  placeholder="Tyler"
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500"
+                  required
+                />
+              </LabelInputContainer>
+              <LabelInputContainer>
+                <Label htmlFor="lastname" className="text-sm text-gray-300">Last Name</Label>
+                <Input
+                  id="lastname"
+                  placeholder="Durden"
+                  type="text"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500"
+                  required
+                />
+              </LabelInputContainer>
+            </div>
+            <LabelInputContainer className="mb-6">
+              <Label htmlFor="email" className="text-sm text-gray-300">Email Address</Label>
+              <Input
+                id="email"
+                placeholder="projectmayhem@fc.com"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500"
+                required
+              />
+            </LabelInputContainer>
+            <LabelInputContainer className="mb-6">
+              <Label htmlFor="password" className="text-sm text-gray-300">Password</Label>
+              <Input
+                id="password"
+                placeholder="••••••••"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500"
+                required
+              />
+            </LabelInputContainer>
+            <LabelInputContainer className="mb-6">
+              <Label htmlFor="confirm-password" className="text-sm text-gray-300">Confirm Password</Label>
+              <Input
+                id="confirm-password"
+                placeholder="••••••••"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500"
+                required
+              />
+            </LabelInputContainer>
+
+            {error && <p className="text-red-400 text-sm text-center mb-4">{error}</p>}
+            {message && <p className="text-green-400 text-sm text-center mb-4">{message}</p>}
+
+            <button
+              className={cn(
+                "group/btn relative flex h-12 w-full items-center justify-center rounded-xl font-medium text-white shadow-lg transition-all duration-200",
+                loading
+                  ? "bg-gray-600 cursor-not-allowed"
+                  : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"
+              )}
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="animate-spin h-5 w-5" /> : "Create Account →"}
+            </button>
+
+            <div className="my-6 h-[1px] w-full bg-gradient-to-r from-transparent via-gray-600/30 to-transparent" />
+            <div className="flex justify-center">
+              <button
+                className="group/btn flex h-10 items-center justify-start space-x-2 rounded-xl bg-gray-700/50 px-4 font-medium text-white transition-all duration-200 hover:bg-gray-600"
+                type="button"
+                onClick={() => router.push("/login")}
+              >
+                <ArrowLeft className="h-4 w-4 text-gray-300" />
+                <span className="text-sm">Back to Login</span>
+              </button>
+            </div>
+          </form>
+
+          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            <DialogContent className="bg-gray-800/90 backdrop-blur-md border-teal-500/20 max-w-md mx-auto">
+              <DialogHeader>
+                <DialogTitle className="text-teal-400">Verify Your Email</DialogTitle>
+                <DialogDescription className="text-gray-300">
+                  A confirmation email has been sent to <b className="text-white">{email}</b>. Please check your inbox and confirm your email before logging in.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  className="bg-teal-500 hover:bg-teal-600 text-white"
+                  onClick={() => router.push("/login")}
+                >
+                  Go to Login
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
-        <LabelInputContainer className="mb-4">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            placeholder="projectmayhem@fc.com"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </LabelInputContainer>
-        <LabelInputContainer className="mb-4">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            placeholder="••••••••"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-        </LabelInputContainer>
-        <LabelInputContainer className="mb-8">
-          <Label htmlFor="confirm-password">Confirm password</Label>
-          <Input
-            id="confirm-password"
-            placeholder="••••••••"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-        </LabelInputContainer>
+      </main>
 
-        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-        {message && <p className="text-green-500 text-sm text-center">{message}</p>}
+      {/* Footer */}
+      <footer className="p-6 text-center z-10 relative text-gray-500 text-sm">
+        © 2025 Carma. Powered by Anyone else. All rights reserved.
+      </footer>
 
-        <button
-          className={cn(
-            "group/btn relative flex h-10 w-full items-center justify-center rounded-md font-medium text-white shadow-md transition",
-            loading
-              ? "bg-gray-500 cursor-not-allowed"
-              : "bg-gradient-to-br from-black to-neutral-600 dark:bg-zinc-800 dark:from-zinc-900 dark:to-zinc-900"
-          )}
-          type="submit"
-          disabled={loading}
-        >
-          {loading ? <Loader2 className="animate-spin h-5 w-5" /> : "Sign up →"}
-        </button>
-
-        <div className="my-8 h-[1px] w-full bg-gradient-to-r from-transparent via-neutral-300 to-transparent dark:via-neutral-700" />
-        <div className="flex flex-col space-y-4">
-          <button
-            className="group/btn shadow-input relative flex h-10 w-full items-center justify-start space-x-2 rounded-md bg-gray-50 px-4 font-medium text-black dark:bg-zinc-900 dark:shadow-md"
-            type="button"
-            onClick={() => router.push("/login")}
-          >
-            <ArrowLeft className="h-4 w-4 text-neutral-800 dark:text-neutral-300" />
-            <span className="text-sm text-neutral-700 dark:text-neutral-300">Back to Login</span>
-          </button>
-        </div>
-      </form>
-
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-md mx-auto">
-          <DialogHeader>
-            <DialogTitle>Verify Your Email</DialogTitle>
-            <DialogDescription>
-              A Confirmation email has been sent to <b>{email}</b>. Please check your inbox and confirm your email before logging in.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => router.push("/login")}>Go to Login</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Custom Styles */}
+      <style jsx global>{`
+        @keyframes pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+        .pulse {
+          animation: pulse 2s infinite;
+        }
+        .bg-gradient-to-br {
+          background: linear-gradient(135deg, #1a202c, #2a4365, #1a202c);
+        }
+        .border-teal-500\/20 {
+          border-color: rgba(20, 184, 166, 0.2);
+        }
+        .hover\:bg-teal-600:hover {
+          background-color: #0d9488;
+        }
+        .shadow-lg {
+          box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+      `}</style>
     </div>
   );
 }
 
 const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => {
-  return <div className={cn("flex w-full flex-col space-y-2", className)}>{children}</div>;
+  return <div className={cn("flex flex-col space-y-2 w-full", className)}>{children}</div>;
 };

@@ -116,33 +116,33 @@ export default function JoinedClassPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-xl font-semibold text-gray-600">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+        <div className="text-xl font-semibold text-gray-200">Loading...</div>
       </div>
     );
   }
 
   if (!classData) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-xl font-semibold text-gray-600">Class not found.</div>
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+        <div className="text-xl font-semibold text-gray-200">Class not found.</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200">
       {/* Header with Back Button */}
-      <header className="flex items-center justify-between p-6 bg-white shadow-sm border-b">
+      <header className="flex items-center justify-between p-6 bg-gradient-to-br from-gray-800 to-gray-900 border-b border-teal-500/20">
         <Button
           onClick={handleBack}
           variant="ghost"
-          className="flex items-center gap-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          className="flex items-center gap-2 text-teal-400 hover:bg-teal-500/20 rounded-lg transition-all duration-200"
         >
           <ArrowLeft className="w-5 h-5" />
           Back to Dashboard
         </Button>
-        <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+        <h1 className="text-xl md:text-2xl font-extrabold text-teal-400">
           {classData.name} - {classData.section}
         </h1>
       </header>
@@ -150,19 +150,17 @@ export default function JoinedClassPage() {
       {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto space-y-8">
         {/* Class Details Section */}
-        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
+        <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
           <ClassDetails classData={classData} />
         </section>
 
         {/* Activities List Section */}
-        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Class Activities</h2>
+        <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
           <ActivitiesList activities={activities} />
         </section>
 
         {/* Code Editor Section */}
-        <section className="bg-white shadow-lg rounded-xl p-6 border border-gray-100">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">Code Editor</h2>
+        <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
           <CodeEditorSection classId={classId as string} />
         </section>
       </div>

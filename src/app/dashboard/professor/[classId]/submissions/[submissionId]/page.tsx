@@ -227,6 +227,10 @@ export default function SubmissionViewPage() {
                 return null;
               }
               const student = studentData[0];
+              if (!codeText || typeof codeText !== "string" || !codeText.trim()) {
+                console.warn(`Skipping submission for ${sub.student_id}/${sub.file_name}: invalid code content`);
+                return null;
+              }
               return {
                 student_id: sub.student_id,
                 file_name: sub.file_name,
@@ -239,20 +243,24 @@ export default function SubmissionViewPage() {
               (sub): sub is Submission => sub !== null
             );
 
-            // Use backend for similarity detection
+            if (submissionsWithCode.length < 2) {
+              console.warn("Not enough valid submissions for similarity detection:", submissionsWithCode.length);
+              setError((prev) => [...prev, "Not enough valid submissions for similarity detection (minimum 2 required)."]);
+              return;
+            }
+
             const codes = submissionsWithCode.map((sub) => sub.code);
+            console.log("Sending codes to /similarity:", codes);
+
             try {
-              if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
-                throw new Error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
+              if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
+                throw new Error("NEXT_PUBLIC_SIMILARITY_DETECTOR_URL is not defined");
               }
-              const response = await fetch(
-                `${process.env.NEXT_PUBLIC_AI_DETECTOR_URL.replace("/detect", "")}/similarity`,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ codes }),
-                }
-              );
+              const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ codes }),
+              });
               if (!response.ok) {
                 throw new Error(`Similarity detection failed: ${response.statusText}`);
               }
@@ -291,7 +299,7 @@ export default function SubmissionViewPage() {
     };
 
     initialize();
-  }, [classId, submissionId, router]); // Removed similarityFilter from dependencies
+  }, [classId, submissionId, router]);
 
   const handleRunCode = () => {
     if (!code.trim()) {
