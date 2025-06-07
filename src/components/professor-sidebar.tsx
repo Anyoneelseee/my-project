@@ -108,7 +108,7 @@ export function ProfessorSidebar({
         })),
       },
       {
-        title: "Bulk AI Checker",
+        title: "Bulk AI Checker and Similarity",
         url: "/dashboard/professor/bulk-ai-checker",
         icon: Upload,
       },

@@ -1,3 +1,4 @@
+// src/app/dashboard/student/sidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -6,6 +7,7 @@ import {
   Command,
   SquareTerminal,
   Users,
+  Upload, // Added for Bulk AI Checker icon
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
@@ -96,6 +98,11 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
               url: `/dashboard/student/my-classes/${cls.id}`,
             }))
           : [{ title: "No classes joined yet", url: "#" }],
+      },
+      {
+        title: "Bulk AI Checker and Similarity",
+        url: "/dashboard/student/bulk-ai-checker",
+        icon: Upload,
       },
     ],
   };
