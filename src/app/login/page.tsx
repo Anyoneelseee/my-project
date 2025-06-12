@@ -175,10 +175,13 @@ export default function LoginPage() {
 
       // Fetch role
       const role = await getUserRole();
-      if (!role) {
-        router.push("/choose-role");
-      } else {
+      if (role) {
         router.push(`/dashboard/${role}`);
+      } else {
+        setError("Role not found. Please contact support to resolve this issue.");
+        console.error("Role not found for user:", user.id);
+        // Optionally redirect to an error page
+        // router.push("/error");
       }
     } catch (err) {
       console.error("Unexpected login error:", err);

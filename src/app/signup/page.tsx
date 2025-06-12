@@ -1,3 +1,4 @@
+// src/app/signup/page.tsx
 "use client";
 
 import React, { useState, FormEvent, useEffect, useRef } from "react";
@@ -83,8 +84,8 @@ const ParticleBackground = () => {
       draw() {
         if (!ctx) return;
         const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
-        gradient.addColorStop(0, "#40C4FF"); // Teal-blue accent
-        gradient.addColorStop(1, "#00ADB5"); // Darker teal
+        gradient.addColorStop(0, "#40C4FF");
+        gradient.addColorStop(1, "#00ADB5");
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -129,23 +130,26 @@ export default function SignupFormDemo() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<"student" | "professor" | "">("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    console.log("Role state updated:", role);
+  }, [role]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setMessage("");
 
-    // Validate required fields
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      setError("All fields are required.");
+    if (!firstName || !lastName || !email || !password || !confirmPassword || !role) {
+      setError("All fields are required, including role selection.");
       return;
     }
 
-    // Validate password match
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -153,20 +157,20 @@ export default function SignupFormDemo() {
 
     setLoading(true);
 
-    // Sign up with user_metadata
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           first_name: firstName,
           last_name: lastName,
+          role: role,
         },
       },
     });
 
-    if (error) {
-      setError(error.message);
+    if (authError) {
+      setError(authError.message);
       setLoading(false);
       return;
     }
@@ -177,37 +181,26 @@ export default function SignupFormDemo() {
       return;
     }
 
+    console.log("Role before signup:", role);
+    console.log("User metadata sent:", { first_name: firstName, last_name: lastName, role });
+
     setShowDialog(true);
     setLoading(false);
   };
 
   return (
     <div className="min-h-svh relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
-      {/* Particle Background */}
       <ParticleBackground />
-
-      {/* Header with Logo */}
       <header className="p-6 md:p-10 z-10 relative flex justify-center">
         <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-teal-400">
-          <Image
-            src="/carmalogo.png"
-            alt="Carma Logo"
-            width={32}
-            height={32}
-            className="rounded-full"
-          />
+          <Image src="/carmalogo.png" alt="Carma Logo" width={32} height={32} className="rounded-full" />
           Carma
         </Link>
       </header>
-
-      {/* Main Content */}
       <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative">
         <div className="bg-gray-800/90 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-teal-500/20 w-full max-w-md">
           <h2 className="text-3xl font-extrabold text-center text-teal-400 mb-6">Create Account</h2>
-          <p className="text-gray-400 text-center mb-8">
-            Join Carma and start your journey with advanced AI tools.
-          </p>
-
+          <p className="text-gray-400 text-center mb-8">Join Carma and start your journey with advanced AI tools.</p>
           <form className="my-8" onSubmit={handleSubmit}>
             <div className="mb-6 flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
               <LabelInputContainer>
@@ -271,6 +264,55 @@ export default function SignupFormDemo() {
                 required
               />
             </LabelInputContainer>
+            <LabelInputContainer className="mb-6">
+              <Label className="text-sm text-gray-300">Select Role</Label>
+              <div className="flex justify-center space-x-6">
+                <div
+                  className={cn(
+                    "flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-all duration-200",
+                    role === "student" ? "bg-gradient-to-br from-teal-500 to-blue-600 shadow-lg" : "bg-gray-700/50 hover:bg-gray-600/70"
+                  )}
+                  onClick={() => setRole("student")}
+                  role="radio"
+                  aria-checked={role === "student"}
+                  tabIndex={0}
+                  onKeyPress={(e) => { if (e.key === "Enter" || e.key === " ") setRole("student"); }}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    value="student"
+                    checked={role === "student"}
+                    onChange={() => {}}
+                    className="hidden"
+                    required
+                  />
+                  <span className="text-white">Student</span>
+                </div>
+                <div
+                  className={cn(
+                    "flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-all duration-200",
+                    role === "professor" ? "bg-gradient-to-br from-teal-500 to-blue-600 shadow-lg" : "bg-gray-700/50 hover:bg-gray-600/70"
+                  )}
+                  onClick={() => setRole("professor")}
+                  role="radio"
+                  aria-checked={role === "professor"}
+                  tabIndex={0}
+                  onKeyPress={(e) => { if (e.key === "Enter" || e.key === " ") setRole("professor"); }}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    value="professor"
+                    checked={role === "professor"}
+                    onChange={() => {}}
+                    className="hidden"
+                    required
+                  />
+                  <span className="text-white">Professor</span>
+                </div>
+              </div>
+            </LabelInputContainer>
 
             {error && <p className="text-red-400 text-sm text-center mb-4">{error}</p>}
             {message && <p className="text-green-400 text-sm text-center mb-4">{message}</p>}
@@ -278,9 +320,7 @@ export default function SignupFormDemo() {
             <button
               className={cn(
                 "group/btn relative flex h-12 w-full items-center justify-center rounded-xl font-medium text-white shadow-lg transition-all duration-200",
-                loading
-                  ? "bg-gray-600 cursor-not-allowed"
-                  : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"
+                loading ? "bg-gray-600 cursor-not-allowed" : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"
               )}
               type="submit"
               disabled={loading}
@@ -321,34 +361,16 @@ export default function SignupFormDemo() {
           </Dialog>
         </div>
       </main>
-
-      {/* Footer */}
       <footer className="p-6 text-center z-10 relative text-gray-500 text-sm">
         © 2025 Carma. Powered by Anyone else. All rights reserved.
       </footer>
-
-      {/* Custom Styles */}
       <style jsx global>{`
-        @keyframes pulse {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-          100% { transform: scale(1); }
-        }
-        .pulse {
-          animation: pulse 2s infinite;
-        }
-        .bg-gradient-to-br {
-          background: linear-gradient(135deg, #1a202c, #2a4365, #1a202c);
-        }
-        .border-teal-500\/20 {
-          border-color: rgba(20, 184, 166, 0.2);
-        }
-        .hover\:bg-teal-600:hover {
-          background-color: #0d9488;
-        }
-        .shadow-lg {
-          box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
-        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .pulse { animation: pulse 2s infinite; }
+        .bg-gradient-to-br { background: linear-gradient(135deg, #1a202c, #2a4365, #1a202c); }
+        .border-teal-500\/20 { border-color: rgba(20, 184, 166, 0.2); }
+        .hover\:bg-teal-600:hover { background-color: #0d9488; }
+        .shadow-lg { box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1); }
       `}</style>
     </div>
   );
