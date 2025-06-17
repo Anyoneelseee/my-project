@@ -209,31 +209,51 @@ export default function LoginPage() {
         </Link>
       </header>
 
-      {/* Main Content */}
-      <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative">
-        <div className="bg-gray-800/90 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-teal-500/20 w-full max-w-md">
-          <h1 className="text-3xl font-extrabold text-center text-teal-400 mb-6">
-            Welcome Back
-          </h1>
-          <p className="text-gray-400 text-center mb-8">
-            Enter your credentials to access your account
-          </p>
-          <LoginForm
-            email={email}
-            setEmail={setEmail}
-            password={password}
-            setPassword={setPassword}
-            handleSubmit={handleSubmit}
-            error={error}
-          />
-          {/* Styled Sign-Up Link */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-500 text-sm">
-              Don’t have an account?{" "}
-              <Link href="/signup" className="text-teal-400 hover:text-teal-300 underline transition-colors duration-200">
-                Sign up
-              </Link>
+      {/* Main Content with Two-Column Layout */}
+      <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative px-4 md:px-8">
+        <div className="flex flex-col md:flex-row w-full max-w-6xl gap-6">
+          {/* Left Login Form */}
+          <div className="w-full md:w-1/2 bg-gray-800/90 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-teal-500/20">
+            <h1 className="text-3xl font-extrabold text-center text-teal-400 mb-6">
+              Welcome Back
+            </h1>
+            <p className="text-gray-400 text-center mb-8">
+              Enter your credentials to access your account
             </p>
+            <LoginForm
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              handleSubmit={handleSubmit}
+              error={error}
+            />
+            {/* Styled Sign-Up Link */}
+            <div className="mt-6 text-center">
+              <p className="text-gray-500 text-sm">
+                Don’t have an account?{" "}
+                <Link href="/signup" className="text-teal-400 hover:text-teal-300 underline transition-colors duration-200">
+                  Sign up
+                </Link>
+              </p>
+            </div>
+          </div>
+
+          {/* Right Design Card */}
+          <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl p-8 shadow-2xl flex flex-col items-center justify-center text-center text-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-black/20 rounded-xl"></div> {/* Subtle overlay */}
+            <Image
+              src="/illustration_login.png" // Replace with your image path (e.g., laptop or AI graphic)
+              alt="Welcome Illustration"
+              width={200}
+              height={200}
+              className="mb-6 rounded-lg shadow-lg z-10"
+            />
+            <h2 className="text-3xl font-extrabold mb-4 z-10">Welcome to Carma</h2>
+            <p className="text-lg text-teal-100 mb-6 z-10">
+                    Discover Carma, where you can check AI-generated code content, manage courses,
+                    and collaborate with peers using our tools. Log in to streamline 
+                    your educational workflow with ease.            </p>
           </div>
         </div>
       </main>

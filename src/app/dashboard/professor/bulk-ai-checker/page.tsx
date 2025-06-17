@@ -255,7 +255,7 @@ export default function BulkAICheckerPage() {
       }
     } else {
       updatedFiles.forEach((fileEntry, idx) => {
-        if (!fileEntry.error && fileEntry.code.trim()) { // Fixed: Replaced 'f' with 'fileEntry'
+        if (!fileEntry.error && fileEntry.code.trim()) {
           updatedFiles[idx] = {
             ...fileEntry,
             similarity: { error: "Not enough valid files for similarity detection (minimum 2 required)" },
@@ -268,6 +268,7 @@ export default function BulkAICheckerPage() {
     setIsProcessing(false);
   };
 
+  // Inner functions to avoid unused warnings
   const detectLanguageFromFileName = (fileName: string): string => {
     const extension = fileName.split(".").pop()?.toLowerCase();
     switch (extension) {
@@ -360,7 +361,7 @@ export default function BulkAICheckerPage() {
                       multiple
                       accept=".py,.cpp,.c,.java"
                       onChange={handleFileChange}
-                      className="mt-2 text-teal-300 bg-gray-800 border-teal-500/20"
+                      className="mt-2 text-teal-300 bg-gray-800 border-teal-500/20" // Changed text color to teal-300
                       disabled={isProcessing || files.length >= 10}
                     />
                     <Button
@@ -384,7 +385,7 @@ export default function BulkAICheckerPage() {
                             key={index}
                             className="bg-gray-800/50 rounded-lg p-4 border border-teal-500/20"
                           >
-                            <div className="flex justify-between items-center mb-2">
+                            <div className="flex justify-between items-center mb-1">
                               <p className="text-sm text-teal-300 font-medium">{fileEntry.file.name}</p>
                               <Button
                                 onClick={() => handleRemoveFile(index)}
@@ -395,20 +396,20 @@ export default function BulkAICheckerPage() {
                               </Button>
                             </div>
                             {fileEntry.aiPercentage !== null && (
-                              <p className="text-xs text-teal-400">
+                              <p className="text-sm text-teal-200 font-medium mb-1">
                                 AI Percentage: {fileEntry.aiPercentage.toFixed(2)}%
                               </p>
                             )}
                             {fileEntry.error && (
-                              <p className="text-xs text-red-400">{fileEntry.error}</p>
+                              <p className="text-sm text-red-400 mb-1">{fileEntry.error}</p>
                             )}
                             {fileEntry.similarity && "error" in fileEntry.similarity ? (
-                              <p className="text-xs text-red-400">{fileEntry.similarity.error}</p>
+                              <p className="text-sm text-red-400 mb-1">{fileEntry.similarity.error}</p>
                             ) : fileEntry.similarity && Object.keys(fileEntry.similarity).length > 0 ? (
-                              <div className="mt-2">
-                                <p className="text-xs text-teal-300">Similarity with other files:</p>
+                              <div className="mt-1">
+                                <p className="text-sm text-teal-300 font-medium">Similarity with other files:</p>
                                 {Object.entries(fileEntry.similarity).map(([fileName, percentage]) => (
-                                  <p key={fileName} className="text-xs text-teal-400 ml-2">
+                                  <p key={fileName} className="text-sm text-teal-200 font-medium ml-2">
                                     {fileName}: {percentage.toFixed(2)}%
                                   </p>
                                 ))}
@@ -417,7 +418,7 @@ export default function BulkAICheckerPage() {
                             <div className="mt-2">
                               <Label className="text-xs text-teal-300">Code</Label>
                               {fileEntry.error ? (
-                                <p className="text-xs text-red-400">Cannot display code due to error.</p>
+                                <p className="text-sm text-red-400">Cannot display code due to error.</p>
                               ) : (
                                 <AceEditor
                                   mode={detectLanguageFromFileName(fileEntry.file.name)}
