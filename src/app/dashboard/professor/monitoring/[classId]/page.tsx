@@ -2,16 +2,16 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase, REALTIME_SUBSCRIBE_STATES } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
 import { ProfessorSidebar } from "@/components/professor-sidebar";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
-  BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
+  BreadcrumbList,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -65,6 +65,13 @@ interface AggregatedLog {
   latest_timestamp: string;
   all_logs: ActivityLog[];
 }
+
+// Manually define REALTIME_SUBSCRIBE_STATES since it's not exported
+const REALTIME_SUBSCRIBE_STATES = {
+  CLOSED: 'CLOSED',
+  CHANNEL_ERROR: 'CHANNEL_ERROR',
+  SUBSCRIBED: 'SUBSCRIBED', // Include other common states if needed
+};
 
 export default function MonitoringPage() {
   const { classId } = useParams();
