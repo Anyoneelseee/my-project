@@ -13,7 +13,12 @@ import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
 import { Dialog, Transition } from "@headlessui/react";
 
-export default function CodeEditorSection({ classId }: { classId: string }) {
+interface CodeEditorSectionProps {
+  classId: string;
+  activityId: string | null;
+}
+
+export default function CodeEditorSection({ classId, activityId }: CodeEditorSectionProps) {
   const [code, setCode] = useState<string>("");
   const [output, setOutput] = useState<string[]>([]);
   const [language, setLanguage] = useState<string>("python");
@@ -30,6 +35,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
   const [isEnrolled, setIsEnrolled] = useState<boolean>(false);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fetchInitialized = useRef(false);
 
   const languageIdMap: { [key: string]: number } = {
     python: 71,
@@ -168,6 +174,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           class_id: classId,
           student_id: userId,
           action,
+          activity_id: activityId || null,
         });
 
       if (insertError) {
@@ -179,7 +186,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           setError((prev) => [...prev, "Failed to log activity. Ensure you are authorized for this class."]);
         }
       } else {
-        console.log("Successfully logged activity:", { classId, userId, action });
+        console.log("Successfully logged activity:", { classId, userId, action, activityId });
       }
     } catch (err) {
       console.error("Unexpected error logging activity:", err);
@@ -188,10 +195,12 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
   };
 
   useEffect(() => {
-    console.log("CodeEditorSection mounted with classId:", classId);
-  }, [classId]);
+    console.log("CodeEditorSection mounted with classId:", classId, "activityId:", activityId);
+  }, [classId, activityId]);
 
   useEffect(() => {
+    if (fetchInitialized.current) return;
+
     async function fetchSectionAndSubmissions() {
       try {
         console.log("Fetching for classId:", classId);
@@ -201,6 +210,8 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           setError((prev) => [...prev, "Please log in to view submissions."]);
           return;
         }
+
+        console.log("Current User ID:", session.user.id);
 
         type SectionResult = {
           section: string | null;
@@ -213,6 +224,8 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
             student_id_input: session.user.id,
           });
 
+        console.log("RPC Data:", sectionData, "Error:", sectionError);
+
         if (sectionError) {
           console.error("Section fetch error:", sectionError.message);
           setError((prev) => [...prev, "Failed to fetch class information."]);
@@ -223,44 +236,83 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
           ? sectionData[0]
           : { section: null, error_message: "No data returned" };
 
+        console.log("Processed Result:", result);
+
         if (!result.section || result.error_message) {
           console.error("No section found for class:", classId, "Error:", result.error_message);
           setError((prev) => [...prev, "You are not enrolled in this class."]);
-          setIsEnrolled(false);
-          return;
+        } else {
+          const sectionName = result.section;
+          setSection(sectionName);
+          setIsEnrolled(true);
+          console.log("Section set to:", sectionName, "isEnrolled set to:", true);
         }
 
-        const sectionName = result.section;
-        setSection(sectionName);
-        setIsEnrolled(true);
-        console.log("Section set to:", sectionName);
+        if (section) {
+          const folderPath = `submissions/${section}/${session.user.id}`;
+          const { data, error } = await supabase.storage
+            .from("submissions")
+            .list(folderPath, {
+              limit: 100,
+              offset: 0,
+              sortBy: { column: "created_at", order: "desc" },
+            });
 
-        await logActivity("Component Mounted");
+          if (error) {
+            console.error("Failed to fetch submissions:", error.message);
+            setError((prev) => [...prev, "Failed to load submissions."]);
+            return;
+          }
 
-        const folderPath = `submissions/${sectionName}/${session.user.id}`;
-        const { data, error } = await supabase.storage
-          .from("submissions")
-          .list(folderPath, {
-            limit: 100,
-            offset: 0,
-            sortBy: { column: "created_at", order: "desc" },
-          });
-
-        if (error) {
-          console.error("Failed to fetch submissions:", error.message);
-          setError((prev) => [...prev, "Failed to load submissions."]);
-          return;
+          setSubmissions(data.map((file) => file.name));
         }
-
-        setSubmissions(data.map((file) => file.name));
       } catch (err) {
         console.error("Error listing submissions:", err);
         setError((prev) => [...prev, "An unexpected error occurred while loading submissions."]);
+      } finally {
+        fetchInitialized.current = true;
       }
     }
 
     fetchSectionAndSubmissions();
   }, [classId]);
+
+  useEffect(() => {
+    if (isEnrolled && section && !fetchInitialized.current) {
+      logActivity("Component Mounted");
+    }
+  }, [isEnrolled, section]);
+
+  useEffect(() => {
+    async function fetchActivityCode() {
+      if (!activityId) {
+        setCode("");
+        setLanguage("python");
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("id", activityId)
+          .eq("class_id", classId)
+          .single();
+
+        if (error) {
+          console.warn("Failed to fetch activity details:", error.message);
+          setError((prev) => [...prev, `Failed to load activity details: ${error.message}`]);
+        } else if (data) {
+          setCode(""); // Default to empty unless uploaded
+          setLanguage("python"); // Default language
+        }
+      } catch (err) {
+        console.error("Unexpected error fetching activity details:", err);
+        setError((prev) => [...prev, "Error loading activity details"]);
+      }
+    }
+
+    fetchActivityCode();
+  }, [classId, activityId]);
 
   const handleSaveCode = () => {
     if (!code.trim()) {
@@ -325,6 +377,10 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
         throw new Error("Class ID is missing");
       }
 
+      if (!activityId) {
+        throw new Error("Activity ID is missing");
+      }
+
       if (!fileExtension) {
         throw new Error("Language extension is missing");
       }
@@ -335,6 +391,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       const requestBody = {
         code,
         classId,
+        activityId,
         language: fileExtension,
         fileName,
         section,
@@ -352,6 +409,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
       });
 
       const data = await response.json();
+      console.log("API Response:", response.status, data);
       if (!response.ok) {
         throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
       }
@@ -605,7 +663,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
                   setOptions={{
                     enableBasicAutocompletion: true,
                     enableLiveAutocompletion: true,
-                    enableSnippets: true,
+                    enableSnippets: false,
                     showLineNumbers: true,
                     tabSize: 2,
                     fontSize: 14,
@@ -656,7 +714,7 @@ export default function CodeEditorSection({ classId }: { classId: string }) {
               <div className="flex gap-2">
                 <Button
                   onClick={handleSubmitActivity}
-                  disabled={isSubmitting || !section || isRunning}
+                  disabled={isSubmitting || !section || isRunning || !activityId}
                   className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200"
                 >
                   Submit Activity

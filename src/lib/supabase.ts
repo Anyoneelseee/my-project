@@ -1,5 +1,4 @@
-// src/lib/supabase.ts
-import { createClient, REALTIME_SUBSCRIBE_STATES } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY;
@@ -17,8 +16,23 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    // Use default localStorage for session persistence
   },
 });
 
-export { REALTIME_SUBSCRIBE_STATES };
+// Export server-side client function
+export const createServerSupabaseClient = () => {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    }
+  );
+};
+
+// Re-export createClient for use in other files
+export { createClient };

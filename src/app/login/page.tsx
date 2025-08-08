@@ -195,29 +195,26 @@ export default function LoginPage() {
       {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Header with Logo */}
-      <header className="p-6 md:p-10 z-10 relative flex justify-center">
-        <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-teal-400">
-          <Image
-            src="/carmalogo.png"
-            alt="Carma Logo"
-            width={50}
-            height={50}
-            className="rounded-full"
-          />
-          Carma
-        </Link>
-      </header>
-
       {/* Main Content with Two-Column Layout */}
-      <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative px-4 md:px-8">
-        <div className="flex flex-col md:flex-row w-full max-w-6xl gap-6">
+      <main className="flex items-center justify-center h-screen z-10 relative px-2 md:px-4 mt-0">
+        <div className="flex flex-col md:flex-row w-full max-w-5xl gap-2 md:gap-4">
           {/* Left Login Form */}
-          <div className="w-full md:w-1/2 bg-gray-800/90 backdrop-blur-md p-8 rounded-xl shadow-2xl border border-teal-500/20">
-            <h1 className="text-3xl font-extrabold text-center text-teal-400 mb-6">
+          <div className="w-full md:w-1/2 bg-gray-800/90 backdrop-blur-md p-3 md:p-4 rounded-lg shadow-lg border border-teal-500/20 flex flex-col items-center max-h-[100vh] min-h-0 flex-grow">
+            {/* Logo and Link at the Top */}
+            <Link href="/" className="flex items-center gap-1 font-bold text-xl md:text-2xl text-teal-400 mb-0.5 md:mb-1">
+              <Image
+                src="/carmalogo.png"
+                alt="Carma Logo"
+                width={35}
+                height={35}
+                className="rounded-full"
+              />
+              CARMA
+            </Link>
+            <h1 className="text-xl md:text-2xl font-bold text-center text-teal-400 mb-0.5 md:mb-1">
               Welcome Back
             </h1>
-            <p className="text-gray-400 text-center mb-8">
+            <p className="text-gray-400 text-center mb-0.5 md:mb-1 text-xs md:text-sm">
               Enter your credentials to access your account
             </p>
             <LoginForm
@@ -229,8 +226,8 @@ export default function LoginPage() {
               error={error}
             />
             {/* Styled Sign-Up Link */}
-            <div className="mt-6 text-center">
-              <p className="text-gray-500 text-sm">
+            <div className="mt-0.5 md:mt-1 text-center">
+              <p className="text-gray-500 text-xs md:text-sm">
                 Don’t have an account?{" "}
                 <Link href="/signup" className="text-teal-400 hover:text-teal-300 underline transition-colors duration-200">
                   Sign up
@@ -240,28 +237,24 @@ export default function LoginPage() {
           </div>
 
           {/* Right Design Card */}
-          <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-xl p-8 shadow-2xl flex flex-col items-center justify-center text-center text-white relative overflow-hidden">
-            <div className="absolute inset-0 bg-black/20 rounded-xl"></div> {/* Subtle overlay */}
+          <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg p-3 md:p-4 shadow-lg flex flex-col items-center justify-center text-center text-white relative overflow-hidden max-h-[100vh] min-h-0 flex-grow">
+            <div className="absolute inset-0 bg-black/20 rounded-lg"></div> {/* Subtle overlay */}
             <Image
-              src="/illustration_login.png" // Replace with your image path (e.g., laptop or AI graphic)
+              src="/illustration_login.png"
               alt="Welcome Illustration"
-              width={200}
-              height={200}
-              className="mb-6 rounded-lg shadow-lg z-10"
+              width={120}
+              height={120}
+              className="mb-0.5 md:mb-1 rounded-lg shadow-lg z-10"
             />
-            <h2 className="text-3xl font-extrabold mb-4 z-10">Welcome to Carma</h2>
-            <p className="text-lg text-teal-100 mb-6 z-10">
-                    Discover Carma, where you can check AI-generated code content, manage courses,
-                    and collaborate with peers using our tools. Log in to streamline 
-                    your educational workflow with ease.            </p>
+            <h2 className="text-xl md:text-2xl font-bold mb-0.5 md:mb-1 z-10">Welcome to Carma</h2>
+            <p className="text-xs md:text-sm text-teal-100 mb-0.5 md:mb-1 z-10">
+              Discover Carma, where you can check AI-generated code content, manage courses,
+              and collaborate with peers using our tools. Log in to streamline 
+              your educational workflow with ease.
+            </p>
           </div>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="p-6 text-center z-10 relative text-gray-500 text-sm">
-        © 2025 Carma. Powered by Anyone else. All rights reserved.
-      </footer>
 
       {/* Custom Styles */}
       <style jsx global>{`
@@ -282,8 +275,8 @@ export default function LoginPage() {
         .hover\:text-teal-300:hover {
           color: #5eead4;
         }
-        .shadow-2xl {
-          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        .shadow-lg {
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
       `}</style>
     </div>

@@ -14,11 +14,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -28,7 +24,7 @@ import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/mode-java";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
-import { Transition, Dialog } from "@headlessui/react"; // Import Headless UI components
+import { Transition, Dialog } from "@headlessui/react";
 
 interface Class {
   id: string;
@@ -39,24 +35,25 @@ interface Class {
 }
 
 interface Submission {
+  id: string;
+  class_id: string;
   student_id: string;
   file_name: string;
-  code: string;
-  student_name: string;
+  file_path: string;
+  language: string;
+  submitted_at: string;
+  ai_percentage?: number;
+  activity_id?: string;
   similarity_percentage?: number;
+  status: string;
+  code?: string;
+  student_name?: string;
 }
 
 interface StudentProfile {
   student_id: string;
   first_name: string;
   last_name: string;
-}
-
-interface SupabaseError {
-  message: string;
-  details?: string;
-  hint?: string;
-  code?: string;
 }
 
 export default function SubmissionViewPage() {
@@ -74,16 +71,16 @@ export default function SubmissionViewPage() {
   const [aiPercentage, setAiPercentage] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [similarSubmissions, setSimilarSubmissions] = useState<Submission[]>([]);
-  const [showApiLimitDialog, setShowApiLimitDialog] = useState(false); // Used now
-  const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false); // Used now
+  const [showApiLimitDialog, setShowApiLimitDialog] = useState(false);
+  const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false);
   const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
   const languageIdMap: { [key: string]: number } = {
-    python: 71, // Python 3
-    cpp: 54,    // C++
-    c: 50,      // C
-    java: 62,   // Java
+    python: 71,
+    cpp: 54,
+    c: 50,
+    java: 62,
   };
 
   const supportedLanguages = Object.keys(languageIdMap);
@@ -109,10 +106,7 @@ export default function SubmissionViewPage() {
       const response = await fetch("/api/judge0", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source_code: sourceCode,
-          language_id: langId,
-        }),
+        body: JSON.stringify({ source_code: sourceCode, language_id: langId }),
       });
 
       if (!response.ok) {
@@ -152,11 +146,7 @@ export default function SubmissionViewPage() {
 
         const data = await response.json();
         if (data.status.id > 2) {
-          return {
-            stdout: data.stdout || "",
-            stderr: data.stderr || "",
-            status: data.status.description,
-          };
+          return { stdout: data.stdout || "", stderr: data.stderr || "", status: data.status.description };
         }
 
         attempts++;
@@ -194,249 +184,219 @@ export default function SubmissionViewPage() {
     if (!token) return;
 
     const result = await pollJudge0Result(token);
-    if (result.stdout) {
-      setOutput(result.stdout.split("\n").filter((line) => line));
-    }
-    if (result.stderr) {
-      setError((prev) => [...prev, result.stderr]);
-    }
+    if (result.stdout) setOutput(result.stdout.split("\n").filter((line) => line));
+    if (result.stderr) setError((prev) => [...prev, result.stderr]);
     setIsRunning(false);
   };
 
-  useEffect(() => {
-    const initialize = async () => {
-      setIsLoading(true);
-      try {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-          if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-            subscription.unsubscribe();
-            proceedWithSession();
+ useEffect(() => {
+  const initialize = async () => {
+    setIsLoading(true);
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+          subscription.unsubscribe();
+          proceedWithSession();
+        }
+      });
+
+      const proceedWithSession = async () => {
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          if (sessionError || !session) {
+            console.warn("No session found:", sessionError?.message);
+            router.push("/login");
+            return;
           }
-        });
 
-        const proceedWithSession = async () => {
-          try {
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError || !session) {
-              console.warn("No session found:", sessionError?.message);
-              router.push("/login");
-              return;
-            }
+          const { data: { user }, error: authError } = await supabase.auth.getUser();
+          if (authError || !user) {
+            console.warn("Auth error:", authError?.message);
+            router.push("/login");
+            return;
+          }
 
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) {
-              console.warn("Auth error:", authError?.message);
-              router.push("/login");
-              return;
-            }
+          const role = await getUserRole();
+          console.log("getUserRole - Profile fetched:", role);
+          if (!role || role !== "professor") {
+            console.warn("Invalid role or no role found:", role);
+            router.push("/dashboard/student");
+            return;
+          }
 
-            const role = await getUserRole();
-            if (!role || role !== "professor") {
-              console.warn("Invalid role or no role found");
-              router.push("/dashboard/student");
-              return;
-            }
+          const { data: classDataArray, error: classError } = await supabase
+            .rpc("get_professor_classes")
+            .eq("id", classId);
 
-            const { data: classDataArray, error: classError } = await supabase
-              .rpc("get_professor_classes")
-              .eq("id", classId);
+          if (classError || !classDataArray || classDataArray.length === 0) {
+            console.warn("Failed to fetch class:", classError?.message);
+            router.push("/dashboard/professor");
+            return;
+          }
 
-            if (classError || !classDataArray || classDataArray.length === 0) {
-              console.warn("Failed to fetch class:", classError?.message);
-              router.push("/dashboard/professor");
-              return;
-            }
+          const classData = classDataArray[0] as Class;
+          setClassData(classData);
 
-            const classData = classDataArray[0] as Class;
-            setClassData(classData);
+          const [studentId, requestedFileName] = decodeURIComponent(submissionId as string).split("/");
+          setFileName(requestedFileName);
+          const detectedLang = detectLanguageFromFileName(requestedFileName);
+          if (!detectedLang || !supportedLanguages.includes(detectedLang)) {
+            setError((prev) => [...prev, "Unsupported language detected"]);
+          } else {
+            setLanguage(detectedLang);
+          }
 
-            const [studentId, fileName] = decodeURIComponent(submissionId as string).split("/");
-            setFileName(fileName);
-            const detectedLang = detectLanguageFromFileName(fileName);
-            if (!detectedLang || !supportedLanguages.includes(detectedLang)) {
-              setError((prev) => [...prev, "Unsupported language detected"]);
-            } else {
-              setLanguage(detectedLang);
-            }
-
-            const { data: studentData, error: studentError } = (await supabase
-              .rpc("get_class_student_profiles", { class_id_input: classId })
-              .eq("student_id", studentId)) as { data: StudentProfile[]; error: SupabaseError | null };
-
-            if (studentError || !studentData || studentData.length === 0) {
-              console.warn("Failed to fetch student:", studentError?.message);
-              setError((prev) => [...prev, "Student not found"]);
-              return;
-            }
-
-            const student = studentData[0];
+          const { data: studentData, error: studentError } = await supabase
+            .rpc("get_class_student_profiles", { class_id_input: classId })
+            .eq("student_id", studentId);
+          console.log("Student Data:", studentData);
+          if (studentError || !studentData || studentData.length === 0) {
+            console.warn("Failed to fetch student:", studentError?.message);
+            setError((prev) => [...prev, "Student not found"]);
+            setStudentName("Unknown");
+          } else {
+            const student = studentData[0] as StudentProfile;
             setStudentName(`${student.first_name} ${student.last_name}`.trim());
+          }
 
-            const filePath = `submissions/${classData.section}/${studentId}/${fileName}`;
-            const { data: fileData, error: fileError } = await supabase.storage
-              .from("submissions")
-              .download(filePath);
+          const { data: submissionData, error: submissionQueryError } = await supabase
+            .from("submissions")
+            .select("*")
+            .eq("class_id", classId)
+            .eq("student_id", studentId)
+            .eq("file_name", requestedFileName)
+            .maybeSingle();
+          if (submissionQueryError) {
+            console.warn("Failed to fetch submission data:", submissionQueryError.message);
+            setError((prev) => [...prev, "Submission not found"]);
+            return;
+          }
 
-            if (fileError) {
-              console.warn("Failed to fetch submission file:", fileError.message);
-              setError((prev) => [...prev, "Failed to load submission file"]);
-              return;
-            }
+          const dbFileName = submissionData.file_name;
+          const filePath = submissionData.file_path || `submissions/${classData.section}/${studentId}/${submissionData.activity_id}/${dbFileName}`;
+          console.log("Attempting to download file from path:", filePath);
+          const { data: fileData, error: fileError } = await supabase.storage
+            .from("submissions")
+            .download(filePath);
+          if (fileError) {
+            console.warn("Failed to fetch submission file:", fileError.message, "Path:", filePath);
+            setError((prev) => [...prev, `Failed to load submission file: ${fileError.message}`]);
+            return;
+          }
+          const text = await fileData.text();
+          setCode(text);
 
-            const text = await fileData.text();
-            setCode(text);
-
-            // Check if AI percentage already exists
-            const { data: submissionData, error: submissionError } = await supabase
-              .from("submissions")
-              .select("ai_percentage")
-              .eq("class_id", classId)
-              .eq("student_id", studentId)
-              .eq("file_name", fileName)
-              .single();
-
-            if (submissionError) {
-              console.warn("Failed to fetch submission data:", submissionError.message);
-            }
-
-            if (submissionData && submissionData.ai_percentage !== null) {
-              setAiPercentage(submissionData.ai_percentage);
-            } else {
+          await Promise.all([
+            (async () => {
+              console.log("Attempting AI detection...");
+              if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
+                console.error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
+                setAiError("AI detection service unavailable.");
+                return;
+              }
               try {
-                if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
-                  throw new Error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
-                }
                 const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ code: text }),
                 });
-
-                if (!response.ok) {
-                  throw new Error(`AI detection failed: ${response.statusText}`);
-                }
-
+                console.log("AI API Response:", response.status); // Remove response.text() to avoid consuming the stream
+                if (!response.ok) throw new Error(`AI detection failed: ${response.statusText}`);
                 const result = await response.json();
+                console.log("AI detection result:", result);
                 const percentage = result.ai_percentage || 0;
                 setAiPercentage(percentage);
-
-                const { error: updateError } = await supabase
+                await supabase
                   .from("submissions")
                   .update({ ai_percentage: percentage })
-                  .eq("class_id", classId)
-                  .eq("student_id", studentId)
-                  .eq("file_name", fileName);
-
-                if (updateError) {
-                  console.warn("Failed to save AI percentage:", updateError.message);
-                }
+                  .eq("id", submissionData.id);
               } catch (err) {
-                console.warn("AI detection error:", err);
-                setAiError("Failed to run AI detection.");
+                console.error("AI detection error:", err);
+                setAiError(err instanceof Error ? err.message : "AI detection failed.");
               }
-            }
+            })(),
+          (async () => {
+  const { data: allSubmissions, error: fetchError } = await supabase
+    .from("submissions")
+    .select("*")
+    .eq("class_id", classId);
+  if (fetchError) {
+    console.warn("Failed to fetch submissions for similarity:", fetchError.message);
+    setError((prev) => [...prev, "Failed to fetch submissions for similarity detection"]);
+    return;
+  }
+  const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
+    const expectedFilePath = sub.file_path || `submissions/${classData.section}/${sub.student_id}/${sub.activity_id}/${sub.file_name}`;
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("submissions")
+      .download(expectedFilePath);
+    if (downloadError) {
+      console.warn("Failed to download submission file:", downloadError.message);
+      return null;
+    }
+    const codeText = await fileData.text();
+    const { data: studentData } = await supabase
+      .rpc("get_class_student_profiles", { class_id_input: classId })
+      .eq("student_id", sub.student_id);
+    const student = studentData?.[0] as StudentProfile;
+    return codeText && typeof codeText === "string" && codeText.trim()
+      ? { ...sub, code: codeText, student_name: student ? `${student.first_name} ${student.last_name}`.trim() : "Unknown" }
+      : null;
+  });
+  const submissionsWithCode = (await Promise.all(submissionsWithCodePromises)).filter(
+    (sub): sub is Submission => sub !== null
+  );
+  console.log("Submissions with code:", submissionsWithCode.map(s => `${s.student_name} - ${s.file_name}`));
+  if (submissionsWithCode.length < 2) {
+    console.warn("Not enough valid submissions for similarity detection:", submissionsWithCode.length);
+    setError((prev) => [...prev, "Not enough valid submissions for similarity detection (minimum 2 required)."]);
+    return;
+  }
+  const codes = submissionsWithCode.map((sub) => sub.code);
+  if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
+    console.error("NEXT_PUBLIC_SIMILARITY_DETECTOR_URL is not defined");
+    setError((prev) => [...prev, "Similarity detection service unavailable."]);
+    return;
+  }
+  const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ codes }),
+  });
+  console.log("Similarity API Response:", response.status);
+  if (!response.ok) throw new Error(`Similarity detection failed: ${response.statusText}`);
+  const result = await response.json();
+  console.log("Similarity detection result:", result);
+  const similarities = result.similarities || {};
+  const currentCodeIndex = submissionsWithCode.findIndex(
+    (sub) => sub.student_id === studentId && sub.file_name === dbFileName
+  );
+  console.log("Current code index:", currentCodeIndex, "for", `${studentId}/${dbFileName}`);
+  const similar = submissionsWithCode
+    .filter((sub, idx) => idx !== currentCodeIndex) // Exclude self
+    .map((sub) => {
+      const originalIdx = submissionsWithCode.findIndex(s => s.id === sub.id);
+      const key = currentCodeIndex < originalIdx ? `${currentCodeIndex}-${originalIdx}` : `${originalIdx}-${currentCodeIndex}`;
+      return { ...sub, similarity_percentage: similarities[key] || 0 };
+    });
+  setSimilarSubmissions(similar);
+})(),
+          ]);
+        } catch (err) {
+          console.error("Unexpected error:", err);
+          router.push("/dashboard/professor");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      router.push("/dashboard/professor");
+    }
+  };
 
-            // Fetch all submissions for similarity detection
-            const { data: allSubmissions, error: fetchError } = await supabase
-              .from("submissions")
-              .select("student_id, file_name, file_path")
-              .eq("class_id", classId);
-
-            if (fetchError) {
-              console.warn("Failed to fetch submissions for similarity:", fetchError.message);
-              return;
-            }
-
-            const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
-              const { data: fileData, error: downloadError } = await supabase.storage
-                .from("submissions")
-                .download(sub.file_path);
-              if (downloadError) {
-                console.warn("Failed to download submission file:", downloadError.message);
-                return null;
-              }
-              const codeText = await fileData.text();
-              const { data: studentData, error: studentError } = (await supabase
-                .rpc("get_class_student_profiles", { class_id_input: classId })
-                .eq("student_id", sub.student_id)) as { data: StudentProfile[]; error: SupabaseError | null };
-              if (studentError || !studentData || studentData.length === 0) {
-                console.warn("Failed to fetch student for submission:", studentError?.message);
-                return null;
-              }
-              const student = studentData[0];
-              if (!codeText || typeof codeText !== "string" || !codeText.trim()) {
-                console.warn(`Skipping submission for ${sub.student_id}/${sub.file_name}: invalid code content`);
-                return null;
-              }
-              return {
-                student_id: sub.student_id,
-                file_name: sub.file_name,
-                code: codeText,
-                student_name: `${student.first_name} ${student.last_name}`.trim(),
-              } as Submission;
-            });
-
-            const submissionsWithCode = (await Promise.all(submissionsWithCodePromises)).filter(
-              (sub): sub is Submission => sub !== null
-            );
-
-            if (submissionsWithCode.length < 2) {
-              console.warn("Not enough valid submissions for similarity detection:", submissionsWithCode.length);
-              setError((prev) => [...prev, "Not enough valid submissions for similarity detection (minimum 2 required)."]);
-              return;
-            }
-
-            const codes = submissionsWithCode.map((sub) => sub.code);
-            console.log("Sending codes to /similarity:", codes);
-
-            try {
-              if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
-                throw new Error("NEXT_PUBLIC_SIMILARITY_DETECTOR_URL is not defined");
-              }
-              const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ codes }),
-              });
-              if (!response.ok) {
-                throw new Error(`Similarity detection failed: ${response.statusText}`);
-              }
-              const result = await response.json();
-              const similarities = result.similarities || {};
-              const currentCodeIndex = submissionsWithCode.findIndex(
-                (sub) => sub.student_id === studentId && sub.file_name === fileName
-              );
-              const similar = submissionsWithCode
-                .filter((sub, idx) => idx !== currentCodeIndex) // Exclude self
-                .map((sub, idx) => {
-                  const similarityKey =
-                    currentCodeIndex < idx ? `${currentCodeIndex}-${idx}` : `${idx}-${currentCodeIndex}`;
-                  const similarityPercentage = similarities[similarityKey] || 0;
-                  return {
-                    ...sub,
-                    similarity_percentage: similarityPercentage,
-                  };
-                });
-              setSimilarSubmissions(similar);
-            } catch (err) {
-              console.warn("Similarity detection error:", err);
-              setError((prev) => [...prev, "Failed to run similarity detection."]);
-            }
-          } catch (err) {
-            console.error("Unexpected error:", err);
-            router.push("/dashboard/professor");
-          } finally {
-            setIsLoading(false);
-          }
-        };
-      } catch (err) {
-        console.error("Unexpected error:", err);
-        router.push("/dashboard/professor");
-      }
-    };
-
-    initialize();
-  }, [classId, submissionId, router]);
+  initialize();
+}, [classId, submissionId, router]);
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
@@ -500,9 +460,7 @@ export default function SubmissionViewPage() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="flex flex-col gap-4">
-                  {/* Code Editor and Output */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Code Editor */}
                     <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                       <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Editor</h3>
                       <Label className="text-sm font-medium text-teal-300">Submitted Code ({language || "unknown"})</Label>
@@ -542,8 +500,6 @@ export default function SubmissionViewPage() {
                         {isRunning ? "Running..." : "Run Code"}
                       </Button>
                     </div>
-
-                    {/* Code Output */}
                     <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                       <h3 className="text-lg font-semibold text-teal-400 mb-2">Output</h3>
                       <div
@@ -566,8 +522,6 @@ export default function SubmissionViewPage() {
                       </div>
                     </div>
                   </div>
-
-                  {/* AI Detector */}
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Detector</h3>
                     <div className="flex items-center justify-center h-[100px] text-teal-300">
@@ -582,8 +536,6 @@ export default function SubmissionViewPage() {
                       )}
                     </div>
                   </div>
-
-                  {/* Code Similarity */}
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Similarity</h3>
                     <div className="space-y-2">
@@ -592,9 +544,7 @@ export default function SubmissionViewPage() {
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           <div className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
-                            <h4 className="text-md font-semibold text-teal-400 mb-2">
-                              Original Submission
-                            </h4>
+                            <h4 className="text-md font-semibold text-teal-400 mb-2">Original Submission</h4>
                             <AceEditor
                               mode={
                                 language === "cpp" || language === "c"
@@ -626,11 +576,11 @@ export default function SubmissionViewPage() {
                               </h4>
                               <AceEditor
                                 mode={
-                                  detectLanguageFromFileName(sub.file_name) === "cpp" || detectLanguageFromFileName(sub.file_name) === "c"
+                                  sub.language === "cpp" || sub.language === "c"
                                     ? "c_cpp"
-                                    : detectLanguageFromFileName(sub.file_name) === "java"
+                                    : sub.language === "java"
                                     ? "java"
-                                    : detectLanguageFromFileName(sub.file_name) === "python"
+                                    : sub.language === "python"
                                     ? "python"
                                     : "text"
                                 }
@@ -660,7 +610,6 @@ export default function SubmissionViewPage() {
         </main>
       </SidebarInset>
 
-      {/* API Limit Dialog */}
       <Transition appear show={showApiLimitDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
           <Transition.Child
@@ -674,7 +623,6 @@ export default function SubmissionViewPage() {
           >
             <div className="fixed inset-0 bg-black bg-opacity-50" />
           </Transition.Child>
-
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4 text-center">
               <Transition.Child
@@ -696,7 +644,7 @@ export default function SubmissionViewPage() {
                       run more code. For concerns or inquiries, contact the developer at:{" "}
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-teal-400 hover:underline ml-1"
+                        className="text-teal-400 hover:underline"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>
@@ -718,7 +666,6 @@ export default function SubmissionViewPage() {
         </Dialog>
       </Transition>
 
-      {/* Connection Error Dialog */}
       <Transition appear show={showConnectionErrorDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowConnectionErrorDialog(false)}>
           <Transition.Child
@@ -732,7 +679,6 @@ export default function SubmissionViewPage() {
           >
             <div className="fixed inset-0 bg-black bg-opacity-50" />
           </Transition.Child>
-
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4 text-center">
               <Transition.Child
@@ -754,7 +700,7 @@ export default function SubmissionViewPage() {
                       persists, contact support at:{" "}
                       <a
                         href="mailto:jbgallego3565qc@student.fatima.edu.ph"
-                        className="text-teal-400 hover:underline ml-1"
+                        className="text-teal-400 hover:underline"
                       >
                         jbgallego3565qc@student.fatima.edu.ph
                       </a>

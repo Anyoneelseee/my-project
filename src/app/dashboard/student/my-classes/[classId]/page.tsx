@@ -23,13 +23,16 @@ interface Activity {
   description: string;
   image_url: string | null;
   created_at: string;
+  code?: string;
+  language?: string;
 }
 
 export default function JoinedClassPage() {
-  const { classId } = useParams();
+  const { classId } = useParams() as { classId: string };
   const router = useRouter();
   const [classData, setClassData] = useState<Class | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -132,7 +135,6 @@ export default function JoinedClassPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200">
-      {/* Header with Back Button */}
       <header className="flex items-center justify-between p-6 bg-gradient-to-br from-gray-800 to-gray-900 border-b border-teal-500/20">
         <Button
           onClick={handleBack}
@@ -147,21 +149,17 @@ export default function JoinedClassPage() {
         </h1>
       </header>
 
-      {/* Main Content */}
       <div className="p-6 max-w-7xl mx-auto space-y-8">
-        {/* Class Details Section */}
         <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
           <ClassDetails classData={classData} />
         </section>
 
-        {/* Activities List Section */}
         <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
-          <ActivitiesList activities={activities} />
+          <ActivitiesList activities={activities} onActivitySelect={setSelectedActivityId} />
         </section>
 
-        {/* Code Editor Section */}
         <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl">
-          <CodeEditorSection classId={classId as string} />
+          <CodeEditorSection classId={classId} activityId={selectedActivityId} />
         </section>
       </div>
     </div>

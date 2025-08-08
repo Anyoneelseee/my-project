@@ -10,15 +10,11 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
+  BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateActivityDialog } from "../CreateActivityDialog";
 import { Button } from "@/components/ui/button";
@@ -48,10 +44,13 @@ interface Activity {
 }
 
 interface Submission {
+  id: string;
+  class_id: string;
   student_id: string;
-  student_name: string;
   file_name: string;
   submitted_at: string;
+  activity_id: string;
+  student_name?: string;
 }
 
 export default function ClassDetailsPage() {
@@ -61,8 +60,11 @@ export default function ClassDetailsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [filteredSubmissions, setFilteredSubmissions] = useState<Submission[]>([]);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isActivityDialogOpen, setIsActivityDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const initialize = async () => {
@@ -100,20 +102,26 @@ export default function ClassDetailsPage() {
               return;
             }
 
+            console.log("Authenticated user ID:", user.id);
             const role = await getUserRole();
-            if (!role) {
-              console.warn("No user role found");
-              router.push("/login");
-              return;
-            }
-            if (role !== "professor") {
+            if (!role || role !== "professor") {
+              console.warn("Invalid role or no role found:", role);
               router.push("/dashboard/student");
               return;
             }
 
+            console.log("Current classId from params (type and value):", typeof classId, classId);
+            if (!classId) {
+              setError("No classId provided in URL parameters.");
+              setIsLoading(false);
+              return;
+            }
+
+            const normalizedClassId = String(classId);
+
             const { data: classDataArray, error: classError } = await supabase
               .rpc("get_professor_classes")
-              .eq("id", classId);
+              .eq("id", normalizedClassId);
 
             if (classError || !classDataArray || classDataArray.length === 0) {
               console.warn("Failed to fetch class:", classError?.message);
@@ -125,66 +133,92 @@ export default function ClassDetailsPage() {
             setClassData(classData);
 
             const { data: studentsData, error: studentsError } = await supabase
-              .rpc("get_class_student_profiles", { class_id_input: classId });
+              .rpc("get_class_student_profiles", { class_id_input: normalizedClassId })
+              .then((response) => {
+                console.log("Raw RPC response for students:", response.data, "Error:", response.error);
+                return response;
+              });
 
             if (studentsError) {
-              console.warn("Failed to fetch students:", studentsError.message);
+              console.warn("Failed to fetch students:", studentsError.message, studentsError.details);
               setStudents([]);
             } else {
               console.log("Fetched students data:", studentsData);
-              setStudents(studentsData as Student[]);
+              setStudents(studentsData as Student[] || []);
             }
 
             const { data: activitiesData, error: activitiesError } = await supabase
               .from("activities")
               .select("*")
-              .eq("class_id", classId);
+              .eq("class_id", normalizedClassId);
 
             if (activitiesError) {
               console.warn("Failed to fetch activities:", activitiesError.message);
               setActivities([]);
             } else {
-              console.log("Fetched activities:", activitiesData);
+              console.log("All activities data:", activitiesData);
               setActivities(activitiesData || []);
+              const fetchSignedUrls = async () => {
+                const urlPromises = activitiesData.map(async (activity) => {
+                  if (activity.image_url) {
+                    const filePath = activity.image_url;
+                    const { data, error } = await supabase.storage
+                      .from("activity-images")
+                      .createSignedUrl(filePath, 3600);
+                    if (error) {
+                      console.error(`Failed to generate signed URL for ${activity.id}:`, error.message);
+                      return { id: activity.id, url: "" };
+                    }
+                    return { id: activity.id, url: data.signedUrl || "" };
+                  }
+                  return { id: activity.id, url: "" };
+                });
+                const urls = await Promise.all(urlPromises);
+                const urlMap = urls.reduce((acc, { id, url }) => ({ ...acc, [id]: url }), {});
+                setSignedUrls(urlMap);
+              };
+              fetchSignedUrls();
             }
 
-            const submissionPromises = (studentsData as Student[] || []).map(async (student: Student) => {
-              const { data: objectsData, error: objectsError } = await supabase.storage
-                .from("submissions")
-                .list(`submissions/${classData.section}/${student.student_id}`, {
-                  limit: 100,
-                  offset: 0,
-                  sortBy: { column: "created_at", order: "desc" },
-                });
+            const { data: submissionsData, error: submissionsError } = await supabase
+              .from("submissions")
+              .select("*")
+              .eq("class_id", normalizedClassId);
 
-              if (objectsError) {
-                console.warn(`Failed to fetch submissions for student ${student.student_id}:`, objectsError.message);
-                return [];
-              }
-
-              console.log(`Raw objects data for student ${student.student_id}:`, objectsData);
-
-              return objectsData
-                .filter((obj) => obj.name && obj.metadata)
-                .map((obj) => {
-                  const submission = {
-                    student_id: student.student_id,
-                    student_name: `${student.first_name} ${student.last_name}`.trim(),
-                    file_name: obj.name,
-                    submitted_at: obj.created_at || new Date().toISOString(),
-                  };
-                  console.log("Processed submission:", submission);
-                  return submission;
-                });
-            });
-
-            const submissionsArrays = await Promise.all(submissionPromises);
-            const submissions = submissionsArrays.flat();
-            console.log("Final submissions:", submissions);
-            setSubmissions(submissions);
-
+            if (submissionsError) {
+              console.error("Error fetching submissions:", submissionsError.message, submissionsError.details);
+              setError(`Failed to fetch submissions: ${submissionsError.message} - ${submissionsError.details || 'No details'}`);
+              setSubmissions([]);
+            } else {
+              console.log("All submissions data:", submissionsData);
+              const submissionsWithNames = await Promise.all(submissionsData.map(async (submission) => {
+                const student = students.find((s) => s.student_id === submission.student_id);
+                let studentName = "Unknown Student";
+                if (student) {
+                  studentName = `${student.first_name} ${student.last_name}`.trim();
+                } else {
+                  const { data: userData, error: userError } = await supabase
+                    .from("users")
+                    .select("first_name, last_name")
+                    .eq("id", submission.student_id)
+                    .single();
+                  console.log(`User data for ${submission.student_id}:`, userData, "Error:", userError);
+                  if (!userError && userData) {
+                    studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+                  }
+                }
+                return {
+                  ...submission,
+                  student_name: studentName,
+                };
+              }));
+              setSubmissions(submissionsWithNames);
+              setFilteredSubmissions(submissionsWithNames); // Initial state with all submissions
+              console.log("Processed submissions:", submissionsWithNames);
+            }
           } catch (err) {
             console.error("Unexpected error in session handling:", err);
+            setError("An unexpected error occurred. Please try again.");
             router.push("/dashboard/professor");
           } finally {
             setIsLoading(false);
@@ -192,6 +226,7 @@ export default function ClassDetailsPage() {
         };
       } catch (err) {
         console.error("Unexpected error:", err);
+        setError("An unexpected error occurred. Please try again.");
         router.push("/dashboard/professor");
       }
     };
@@ -200,7 +235,6 @@ export default function ClassDetailsPage() {
   }, [classId, router]);
 
   const handleActivityCreated = async () => {
-    console.log("Activity created, refreshing activities...");
     const { data, error } = await supabase
       .from("activities")
       .select("*")
@@ -210,12 +244,81 @@ export default function ClassDetailsPage() {
       console.warn("Failed to fetch updated activities:", error.message);
       setActivities([]);
     } else {
+      console.log("Updated activities data:", data);
       setActivities(data || []);
+      const fetchSignedUrls = async () => {
+        const urlPromises = data.map(async (activity) => {
+          if (activity.image_url) {
+            const filePath = activity.image_url;
+            const { data, error } = await supabase.storage
+              .from("activity-images")
+              .createSignedUrl(filePath, 3600);
+            if (error) {
+              console.error(`Failed to generate signed URL for ${activity.id}:`, error.message);
+              return { id: activity.id, url: "" };
+            }
+            return { id: activity.id, url: data.signedUrl || "" };
+          }
+          return { id: activity.id, url: "" };
+        });
+        const urls = await Promise.all(urlPromises);
+        const urlMap = urls.reduce((acc, { id, url }) => ({ ...acc, [id]: url }), {});
+        setSignedUrls(urlMap);
+      };
+      fetchSignedUrls();
     }
+
+    const { data: submissionsData, error: submissionsError } = await supabase
+      .from("submissions")
+      .select("*")
+      .eq("class_id", classId);
+    if (submissionsError) {
+      console.warn("Failed to fetch updated submissions:", submissionsError.message);
+      setSubmissions([]);
+    } else {
+      console.log("Updated submissions data:", submissionsData);
+      const submissionsWithNames = await Promise.all(submissionsData.map(async (submission) => {
+        const student = students.find((s) => s.student_id === submission.student_id);
+        let studentName = "Unknown Student";
+        if (student) {
+          studentName = `${student.first_name} ${student.last_name}`.trim();
+        } else {
+          const { data: userData, error: userError } = await supabase
+            .from("users")
+            .select("first_name, last_name")
+            .eq("id", submission.student_id)
+            .single();
+          if (!userError && userData) {
+            studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+          }
+        }
+        return {
+          ...submission,
+          student_name: studentName,
+        };
+      }));
+      setSubmissions(submissionsWithNames);
+      setFilteredSubmissions(submissionsWithNames); // Update filtered submissions
+    }
+  };
+
+  const handleActivityClick = (activityId: string) => {
+    console.log(`Filtering submissions for activity ${activityId}`);
+    const activitySubmissions = submissions.filter((submission) => submission.activity_id === activityId);
+    console.log(`Found ${activitySubmissions.length} submissions for activity ${activityId}:`, activitySubmissions);
+    setFilteredSubmissions(activitySubmissions);
   };
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        {error}
+      </div>
+    );
   }
 
   if (!classData) {
@@ -224,7 +327,11 @@ export default function ClassDetailsPage() {
 
   return (
     <SidebarProvider>
-      <ProfessorSidebar classes={[{ id: classId as string, name: classData.name, section: classData.section, course: classData.course, code: classData.code }]} />
+      <ProfessorSidebar
+        classes={[
+          { id: classId as string, name: classData.name, section: classData.section, course: classData.course, code: classData.code },
+        ]}
+      />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
           <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
@@ -232,7 +339,10 @@ export default function ClassDetailsPage() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
+                <BreadcrumbLink
+                  href="/dashboard/professor"
+                  className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
+                >
                   Home
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -245,7 +355,6 @@ export default function ClassDetailsPage() {
         </header>
         <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <div className="max-w-7xl mx-auto space-y-6">
-            {/* Class Details */}
             <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
               <CardHeader className="border-b border-teal-500/20">
                 <CardTitle className="text-2xl font-semibold text-teal-400">{classData.name}</CardTitle>
@@ -274,12 +383,11 @@ export default function ClassDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Enrolled Students */}
             <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
               <CardHeader className="border-b border-teal-500/20">
                 <CardTitle className="text-xl font-semibold text-teal-400">Enrolled Students</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-4 overflow-y-auto max-h-60">
                 {students.length === 0 ? (
                   <p className="text-teal-300 text-center">No students have joined this class.</p>
                 ) : (
@@ -298,55 +406,71 @@ export default function ClassDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Activities */}
             <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
               <CardHeader className="border-b border-teal-500/20">
                 <CardTitle className="text-xl font-semibold text-teal-400">Activities</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-4 overflow-y-auto max-h-60">
                 {activities.length === 0 ? (
                   <p className="text-teal-300 text-center">No activities created yet.</p>
                 ) : (
-                  <div className="space-y-2">
-                    {activities.map((activity) => (
-                      <div
-                        key={activity.id}
-                        className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
-                      >
-                        <p className="font-semibold text-teal-400">{activity.description}</p>
-                        {activity.image_url && (
-                          <Image
-                            src={activity.image_url}
-                            alt="Activity"
-                            width={200}
-                            height={150}
-                            className="rounded-md w-full max-w-[200px] h-auto mt-2"
-                          />
-                        )}
-                        <p className="text-sm text-teal-300">
-                          Created at: {new Date(activity.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="space-y-4">
+                    {activities.map((activity) => {
+                      const isImageValid = activity.image_url && !activity.image_url.includes("null");
+                      return (
+                        <div
+                          key={activity.id}
+                          className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors cursor-pointer"
+                          onClick={() => handleActivityClick(activity.id)}
+                        >
+                          <p className="font-semibold text-teal-400">{activity.description}</p>
+                          {isImageValid && signedUrls[activity.id] && (
+                            <Image
+                              src={signedUrls[activity.id]}
+                              alt="Activity"
+                              width={200}
+                              height={150}
+                              className="rounded-md w-full max-w-[200px] h-auto mt-2 object-cover"
+                              unoptimized
+                              loading="lazy"
+                              onError={(e) => {
+                                console.error("Image load failed:", signedUrls[activity.id], e);
+                                const img = e.target as HTMLImageElement;
+                                if (!img.src.includes("/placeholder-image.jpg")) {
+                                  img.src = "/placeholder-image.jpg";
+                                }
+                              }}
+                            />
+                          )}
+                          {(!isImageValid || !signedUrls[activity.id]) && (
+                            <p className="text-teal-300 text-sm mt-2">No image available</p>
+                          )}
+                          <p className="text-sm text-teal-300">
+                            Created at: {new Date(activity.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Student Submissions */}
             <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
               <CardHeader className="border-b border-teal-500/20">
                 <CardTitle className="text-xl font-semibold text-teal-400">Student Submissions</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                {submissions.length === 0 ? (
-                  <p className="text-teal-300 text-center">No submissions yet.</p>
+              <CardContent className="pt-4 overflow-y-auto max-h-60">
+                {filteredSubmissions.length === 0 ? (
+                  <p className="text-teal-300 text-center">Click an activity to view submissions.</p>
                 ) : (
                   <div className="space-y-2">
-                    {submissions.map((submission) => (
+                    {filteredSubmissions.map((submission) => (
                       <Link
                         key={`${submission.student_id}-${submission.file_name}`}
-                        href={`/dashboard/professor/${classId}/submissions/${encodeURIComponent(`${submission.student_id}/${submission.file_name}`)}`}
+                        href={`/dashboard/professor/${classId}/submissions/${encodeURIComponent(
+                          `${submission.student_id}/${submission.file_name}`
+                        )}`}
                       >
                         <div
                           className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors cursor-pointer"
