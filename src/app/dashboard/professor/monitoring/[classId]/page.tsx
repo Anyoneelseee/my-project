@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, ChangeEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
 import { ProfessorSidebar } from "@/components/professor-sidebar";
@@ -70,7 +70,7 @@ interface AggregatedLog {
 const REALTIME_SUBSCRIBE_STATES = {
   CLOSED: 'CLOSED',
   CHANNEL_ERROR: 'CHANNEL_ERROR',
-  SUBSCRIBED: 'SUBSCRIBED', // Include other common states if needed
+  SUBSCRIBED: 'SUBSCRIBED',
 };
 
 export default function MonitoringPage() {
@@ -243,7 +243,6 @@ export default function MonitoringPage() {
           setErrorMessage("Real-time updates failed. Please refresh the page.");
         }
         console.log("Subscription status:", status);
-        // Attempt to reconnect on error or closed state
         if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
           console.log("Attempting to reconnect to channel:", `activity_logs:class_${classId}`);
           setTimeout(() => {
@@ -362,7 +361,7 @@ export default function MonitoringPage() {
                   <Input
                     placeholder="Filter by student or action"
                     value={filter}
-                    onChange={(e) => setFilter(e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
                     className="w-64 bg-gray-700/50 text-teal-300 border-teal-500/20 focus:ring-teal-500 focus:border-teal-500"
                   />
                   <Button
