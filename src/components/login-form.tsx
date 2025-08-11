@@ -59,7 +59,7 @@ export default function LoginForm({
             placeholder="m@example.com" 
             required 
             value={email} 
-            onChange={(e) => setEmail(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
           />
         </div>
         <div className="grid gap-3">
@@ -74,7 +74,7 @@ export default function LoginForm({
             type="password" 
             required 
             value={password} 
-            onChange={(e) => setPassword(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
           />
         </div>
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
