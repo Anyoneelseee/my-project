@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
@@ -293,7 +293,7 @@ export default function StudentDashboard() {
                         <Input
                           id="code"
                           value={classCode}
-                          onChange={(e) => setClassCode(e.target.value)}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setClassCode(e.target.value)}
                           placeholder="Enter class code"
                           className="w-full p-2 bg-gray-700/50 border-gray-600 text-gray-200 placeholder-gray-400 focus:border-teal-500 rounded-lg"
                           autoFocus
