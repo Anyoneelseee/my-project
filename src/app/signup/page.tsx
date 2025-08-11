@@ -208,7 +208,7 @@ export default function SignupFormDemo() {
                 placeholder="Tyler"
                 type="text"
                 value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFirstName(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
@@ -220,7 +220,7 @@ export default function SignupFormDemo() {
                 placeholder="Durden"
                 type="text"
                 value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLastName(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
@@ -232,7 +232,7 @@ export default function SignupFormDemo() {
                 placeholder="projectmayhem@fc.com"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
@@ -244,7 +244,7 @@ export default function SignupFormDemo() {
                 placeholder="••••••••"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
@@ -256,7 +256,7 @@ export default function SignupFormDemo() {
                 placeholder="••••••••"
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
@@ -273,8 +273,9 @@ export default function SignupFormDemo() {
                   role="radio"
                   aria-checked={role === "student"}
                   tabIndex={0}
-                  onKeyPress={(e) => { if (e.key === "Enter" || e.key === " ") setRole("student"); }}
-                >
+onKeyPress={(e: React.KeyboardEvent<HTMLDivElement>) => { 
+  if (e.key === "Enter" || e.key === " ") setRole("student"); 
+}}                >
                   <input
                     type="radio"
                     name="role"
@@ -295,8 +296,9 @@ export default function SignupFormDemo() {
                   role="radio"
                   aria-checked={role === "professor"}
                   tabIndex={0}
-                  onKeyPress={(e) => { if (e.key === "Enter" || e.key === " ") setRole("professor"); }}
-                >
+onKeyPress={(e: React.KeyboardEvent<HTMLDivElement>) => { 
+  if (e.key === "Enter" || e.key === " ") setRole("professor"); 
+}}                >
                   <input
                     type="radio"
                     name="role"
