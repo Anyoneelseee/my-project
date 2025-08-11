@@ -6,6 +6,8 @@ interface Class {
   section: string;
   course: string;
   code: string;
+  professorName?: string;
+  professorEmail?: string;
 }
 
 export default function ClassDetails({ classData }: { classData: Class }) {
@@ -23,6 +25,12 @@ export default function ClassDetails({ classData }: { classData: Class }) {
           </p>
           <p className="text-sm md:text-base font-semibold text-teal-300 bg-teal-500/30 px-3 py-1 rounded-full inline-block">
             Class Code: {classData.code}
+          </p>
+          <p className="text-sm md:text-base text-gray-200">
+            Professor: {classData.professorName || 'Not assigned'}
+          </p>
+          <p className="text-sm md:text-base text-gray-200">
+            Email: {classData.professorEmail || 'Not provided'}
           </p>
         </div>
       </CardContent>

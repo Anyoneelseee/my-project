@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus } from "lucide-react";
+import { ChangeEvent } from "react";
 
 interface CreateClassDialogProps {
   isOpen: boolean;
@@ -55,7 +56,9 @@ export function CreateClassDialog({
             <Input
               id="name"
               value={newClass.name}
-              onChange={(e) => setNewClass({ ...newClass, name: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewClass({ ...newClass, name: e.target.value })
+              }
               placeholder="e.g., Introduction to Programming"
               className="w-full p-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-gray-700/50 text-gray-200"
               autoFocus
@@ -68,7 +71,9 @@ export function CreateClassDialog({
             <Input
               id="section"
               value={newClass.section}
-              onChange={(e) => setNewClass({ ...newClass, section: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewClass({ ...newClass, section: e.target.value })
+              }
               placeholder="e.g., A"
               className="w-full p-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-gray-700/50 text-gray-200"
             />
@@ -80,7 +85,9 @@ export function CreateClassDialog({
             <Input
               id="course"
               value={newClass.course}
-              onChange={(e) => setNewClass({ ...newClass, course: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setNewClass({ ...newClass, course: e.target.value })
+              }
               placeholder="e.g., CS101"
               className="w-full p-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-gray-700/50 text-gray-200"
             />
