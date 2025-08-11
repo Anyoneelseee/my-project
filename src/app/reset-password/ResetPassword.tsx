@@ -70,14 +70,14 @@ export default function ResetPassword() {
               type="password"
               placeholder="Enter new password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
               required
             />
             <Input
               type="password"
               placeholder="Confirm new password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
               required
             />
             <Button type="submit" className="w-full" disabled={loading}>
