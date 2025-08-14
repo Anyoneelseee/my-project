@@ -13,6 +13,15 @@ import {
   BreadcrumbSeparator,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -369,21 +378,36 @@ export default function ClassDetailsPage() {
                 <CardTitle className="text-xl font-semibold text-teal-400">Enrolled Students</CardTitle>
               </CardHeader>
               <CardContent className="pt-4 overflow-y-auto max-h-60">
-                {students.length === 0 ? (
-                  <p className="text-teal-300 text-center">No students have joined this class.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {students.map((student) => (
-                      <div
-                        key={student.student_id}
-                        className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors"
-                      >
-                        <p className="font-semibold text-teal-400">{student.first_name} {student.last_name}</p>
-                        <p className="text-sm text-teal-300">Section: {student.section}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {students.length === 0 ? (
+  <p className="text-teal-300 text-center">No students have joined this class.</p>
+) : (
+  <div className="overflow-y-auto max-h-[400px]"> {/* Scrollable container */}
+
+  <Table className="text-lg">
+    <TableHeader className="sticky top-0 bg-gray-800 z-10"
+>
+      <TableRow className="border-teal-500/20">
+        <TableHead className="text-teal-300">First Name</TableHead>
+        <TableHead className="text-teal-300">Last Name</TableHead>
+        <TableHead className="text-teal-300">Section</TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {students.map((student) => (
+        <TableRow
+          key={student.student_id}
+          className="border-teal-500/20 hover:bg-gray-700/50 transition-colors"
+        >
+          <TableCell className="text-teal-400 font-medium">{student.first_name}</TableCell>
+          <TableCell className="text-teal-400 font-medium">{student.last_name}</TableCell>
+          <TableCell className="text-teal-300">{student.section}</TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+  </div>
+)}
+
               </CardContent>
             </Card>
 

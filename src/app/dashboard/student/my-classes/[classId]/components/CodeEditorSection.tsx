@@ -15,10 +15,19 @@ import { Dialog, Transition } from "@headlessui/react";
 
 interface CodeEditorSectionProps {
   classId: string;
-  activityId: string | null;
 }
 
-export default function CodeEditorSection({ classId, activityId }: CodeEditorSectionProps) {
+interface Judge0Response {
+  token: string;
+}
+
+interface Judge0Result {
+  stdout: string | null;
+  stderr: string | null;
+  status: { id: number; description: string };
+}
+
+export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
   const [code, setCode] = useState<string>("");
   const [output, setOutput] = useState<string[]>([]);
   const [language, setLanguage] = useState<string>("python");
@@ -46,7 +55,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
 
   const supportedLanguages = Object.keys(languageIdMap);
 
-  const submitCodeToJudge0 = async (sourceCode: string, langId: number) => {
+  const submitCodeToJudge0 = async (sourceCode: string, langId: number): Promise<string | null> => {
     try {
       const response = await fetch("/api/judge0", {
         method: "POST",
@@ -67,7 +76,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
         throw new Error(`Judge0 submission failed: ${response.statusText} - ${errorMessage}`);
       }
 
-      const data = await response.json();
+      const data: Judge0Response = await response.json();
       return data.token;
     } catch (err) {
       setConnectionErrorMessage(
@@ -92,7 +101,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
           throw new Error(`Judge0 polling failed: ${response.statusText} - ${errorMessage}`);
         }
 
-        const data = await response.json();
+        const data: Judge0Result = await response.json();
         if (data.status.id > 2) {
           return {
             stdout: data.stdout || "",
@@ -174,7 +183,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
           class_id: classId,
           student_id: userId,
           action,
-          activity_id: activityId || null,
+          activity_id: null,
         });
 
       if (insertError) {
@@ -186,17 +195,13 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
           setError((prev) => [...prev, "Failed to log activity. Ensure you are authorized for this class."]);
         }
       } else {
-        console.log("Successfully logged activity:", { classId, userId, action, activityId });
+        console.log("Successfully logged activity:", { classId, userId, action });
       }
     } catch (err) {
       console.error("Unexpected error logging activity:", err);
       setError((prev) => [...prev, "An unexpected error occurred."]);
     }
   };
-
-  useEffect(() => {
-    console.log("CodeEditorSection mounted with classId:", classId, "activityId:", activityId);
-  }, [classId, activityId]);
 
   useEffect(() => {
     if (fetchInitialized.current) return;
@@ -275,44 +280,13 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
     }
 
     fetchSectionAndSubmissions();
-  }, [classId]);
+  }, [classId, section]);
 
   useEffect(() => {
     if (isEnrolled && section && !fetchInitialized.current) {
       logActivity("Component Mounted");
     }
   }, [isEnrolled, section]);
-
-  useEffect(() => {
-    async function fetchActivityCode() {
-      if (!activityId) {
-        setCode("");
-        setLanguage("python");
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from("activities")
-          .select("*")
-          .eq("id", activityId)
-          .eq("class_id", classId)
-          .single();
-
-        if (error) {
-          console.warn("Failed to fetch activity details:", error.message);
-          setError((prev) => [...prev, `Failed to load activity details: ${error.message}`]);
-        } else if (data) {
-          setCode(""); // Default to empty unless uploaded
-          setLanguage("python"); // Default language
-        }
-      } catch (err) {
-        console.error("Unexpected error fetching activity details:", err);
-        setError((prev) => [...prev, "Error loading activity details"]);
-      }
-    }
-
-    fetchActivityCode();
-  }, [classId, activityId]);
 
   const handleSaveCode = () => {
     if (!code.trim()) {
@@ -369,34 +343,28 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
         throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
       }
 
-      if (!code.trim()) {
-        throw new Error("Code cannot be empty for submission");
+      if (!code.trim() && !selectedFile) {
+        throw new Error("Code or file cannot be empty for submission");
       }
 
       if (!classId) {
         throw new Error("Class ID is missing");
       }
 
-      if (!activityId) {
-        throw new Error("Activity ID is missing");
-      }
-
-      if (!fileExtension) {
-        throw new Error("Language extension is missing");
-      }
-
+      const activityId = prompt("Enter the Activity ID for this submission (optional):");
       const defaultFileName = `submission-${Date.now()}.${fileExtension}`;
       const fileName = selectedFile?.name || defaultFileName;
 
       const requestBody = {
-        code,
+        code: code.trim() || null,
         classId,
-        activityId,
+        activityId: activityId || null,
         language: fileExtension,
         fileName,
         section,
         studentId: session.user.id,
       };
+
       console.log("Submitting to /api/studentsubmit_code with body:", requestBody);
 
       const response = await fetch("/api/studentsubmit_code", {
@@ -412,6 +380,17 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
       console.log("API Response:", response.status, data);
       if (!response.ok) {
         throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
+      }
+
+      if (selectedFile) {
+        const filePath = `submissions/${section}/${session.user.id}/${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("submissions")
+          .upload(filePath, selectedFile, { upsert: true });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload file: ${uploadError.message}`);
+        }
       }
 
       alert(data.message);
@@ -450,7 +429,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto text-white">
+    <div className="p-6 w-full text-white">
       <Transition appear show={showApiLimitDialog} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
           <Transition.Child
@@ -620,7 +599,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
         </Dialog>
       </Transition>
 
-      <Card className="border-none rounded-xl bg-gradient-to-br from-gray-800 to-gray-900">
+      <Card className="border-none rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 w-full">
         <CardHeader>
           <CardTitle className="text-2xl font-extrabold text-teal-400">Interactive Monitoring Code Editor</CardTitle>
         </CardHeader>
@@ -644,8 +623,8 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
                 <option value="java">Java</option>
               </select>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="w-full">
                 <Label className="text-sm font-medium text-gray-200">Code Editor</Label>
                 <AceEditor
                   mode={
@@ -690,7 +669,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
                   </Button>
                 </div>
               </div>
-              <div>
+              <div className="w-full">
                 <Label className="text-sm font-medium text-gray-200">Output</Label>
                 <div
                   className="p-4 bg-gray-900/50 rounded-lg overflow-y-auto border border-gray-600"
@@ -714,7 +693,7 @@ export default function CodeEditorSection({ classId, activityId }: CodeEditorSec
               <div className="flex gap-2">
                 <Button
                   onClick={handleSubmitActivity}
-                  disabled={isSubmitting || !section || isRunning || !activityId}
+                  disabled={isSubmitting || !section || isRunning}
                   className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200"
                 >
                   Submit Activity

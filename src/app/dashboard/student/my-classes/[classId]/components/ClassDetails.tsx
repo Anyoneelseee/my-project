@@ -21,16 +21,19 @@ export default function ClassDetails({ classData }: { classData: Class }) {
       <CardContent className="pt-0">
         <div className="space-y-2">
           <p className="text-sm md:text-base text-gray-200">
-            Section: {classData.section} | Course: {classData.course}
+            Section: {classData.section}
           </p>
-          <p className="text-sm md:text-base font-semibold text-teal-300 bg-teal-500/30 px-3 py-1 rounded-full inline-block">
-            Class Code: {classData.code}
+            <p className="text-sm md:text-base text-gray-200">
+             Course: {classData.course}
           </p>
-          <p className="text-sm md:text-base text-gray-200">
+            <p className="text-sm md:text-base text-gray-200">
+            
             Professor: {classData.professorName || 'Not assigned'}
-          </p>
+            </p>
           <p className="text-sm md:text-base text-gray-200">
-            Email: {classData.professorEmail || 'Not provided'}
+            Email: {classData.professorEmail || 'Not provided'}          </p>
+               <p className="text-sm md:text-base font-semibold text-teal-300 bg-teal-500/30 px-3 py-1 rounded-full inline-block">
+            Class Code: {classData.code}
           </p>
         </div>
       </CardContent>
