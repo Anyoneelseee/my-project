@@ -7,6 +7,7 @@ import {
   ChevronsUpDown,
   LogOut,
   Settings2,
+  User,
 } from "lucide-react";
 
 import {
@@ -57,6 +58,14 @@ export function NavUser({
     router.push("/login");
   };
 
+  const handleProfile = () => {
+    router.push("/profiles");
+  };
+
+  const handleSettings = () => {
+    router.push("/settings");
+  };
+
   return (
     <>
       <SidebarMenu className="bg-transparent">
@@ -102,7 +111,18 @@ export function NavUser({
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
-                <DropdownMenuItem className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                <DropdownMenuItem
+                  onClick={handleProfile}
+                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
+                >
+                  <User className="mr-2" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-gray-600/30" />
+                <DropdownMenuItem
+                  onClick={handleSettings}
+                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
+                >
                   <Settings2 className="mr-2" />
                   Settings
                 </DropdownMenuItem>

@@ -1,4 +1,3 @@
-// src/components/professor-sidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -8,7 +7,7 @@ import {
   SquareTerminal,
   PlusCircle,
   LineChart,
-  Upload, // Added for Bulk AI Checker icon
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
@@ -20,6 +19,11 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 interface Class {
   id: string;
@@ -36,32 +40,36 @@ export function ProfessorSidebar({
   const [user, setUser] = useState({
     name: "Professor Name",
     email: "professor@example.com",
-    avatar: "/avatars/professor.jpg",
+    avatar: "",
   });
 
   useEffect(() => {
     console.log("ProfessorSidebar classes:", classes);
     const fetchUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) {
+        const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        if (error || !authUser) {
           console.error("Failed to fetch user:", error?.message);
           return;
         }
         const { data: userData, error: userError } = await supabase
-          .from("users")
-          .select("first_name, last_name")
-          .eq("id", user.id)
-          .single();
-        if (userError) {
-          console.warn("Failed to fetch user details:", userError.message);
+          .rpc("get_user_profile", { user_id_input: authUser.id });
+        if (userError || !userData || userData.length === 0) {
+          console.warn("Failed to fetch user details:", userError?.message || "No user data found");
+          setUser({
+            name: authUser.email?.split("@")[0] || "Professor",
+            email: authUser.email || "professor@example.com",
+            avatar: "",
+          });
+          return;
         }
+        const userProfile = userData[0];
         setUser({
-          name: userData && userData.first_name && userData.last_name
-            ? `${userData.first_name} ${userData.last_name}`.trim()
-            : user.email?.split("@")[0] || "Professor",
-          email: user.email || "professor@example.com",
-          avatar: user.user_metadata?.avatar_url || "/avatars/professor.jpg",
+          name: userProfile.first_name && userProfile.last_name
+            ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
+            : authUser.email?.split("@")[0] || "Professor",
+          email: userProfile.email || "professor@example.com",
+          avatar: userProfile.avatar_url || "",
         });
       } catch (err) {
         console.error("Unexpected error fetching user:", err);
@@ -117,7 +125,14 @@ export function ProfessorSidebar({
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader></SidebarHeader>
+      <SidebarHeader>
+        <Avatar className="h-12 w-12 rounded-xl bg-slate-700 ring-2 ring-teal-400/50">
+          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarFallback className="rounded-xl text-slate-200 text-2xl font-semibold">
+            {user.name.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
       </SidebarContent>

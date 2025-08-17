@@ -1,4 +1,3 @@
-// src/app/dashboard/student/sidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -7,7 +6,7 @@ import {
   Command,
   SquareTerminal,
   Users,
-  Upload, // Added for Bulk AI Checker icon
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
@@ -19,8 +18,12 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
-// Interface for a class
 interface Class {
   id: string;
   name: string;
@@ -29,7 +32,6 @@ interface Class {
   code: string;
 }
 
-// Define the props type for StudentSidebar
 interface StudentSidebarProps extends React.ComponentProps<typeof Sidebar> {
   classes?: Class[];
 }
@@ -38,31 +40,35 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
   const [user, setUser] = useState({
     name: "Student Name",
     email: "student@example.com",
-    avatar: "/avatars/student.jpg",
+    avatar: "",
   });
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error || !user) {
+        const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        if (error || !authUser) {
           console.error("Failed to fetch user:", error?.message);
           return;
         }
         const { data: userData, error: userError } = await supabase
-          .from("users")
-          .select("first_name, last_name")
-          .eq("id", user.id)
-          .single();
-        if (userError) {
-          console.warn("Failed to fetch user details:", userError.message);
+          .rpc("get_user_profile", { user_id_input: authUser.id });
+        if (userError || !userData || userData.length === 0) {
+          console.warn("Failed to fetch user details:", userError?.message || "No user data found");
+          setUser({
+            name: authUser.email?.split("@")[0] || "Student",
+            email: authUser.email || "student@example.com",
+            avatar: "",
+          });
+          return;
         }
+        const userProfile = userData[0];
         setUser({
-          name: userData && userData.first_name && userData.last_name
-            ? `${userData.first_name} ${userData.last_name}`.trim()
-            : user.email?.split("@")[0] || "Student",
-          email: user.email || "student@example.com",
-          avatar: user.user_metadata?.avatar_url || "/avatars/student.jpg",
+          name: userProfile.first_name && userProfile.last_name
+            ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
+            : authUser.email?.split("@")[0] || "Student",
+          email: userProfile.email || "student@example.com",
+          avatar: userProfile.avatar_url || "",
         });
       } catch (err) {
         console.error("Unexpected error fetching user:", err);
@@ -113,7 +119,14 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
       className="bg-transparent [&[data-slot=sidebar-container]]:bg-gradient-to-br [&[data-slot=sidebar-container]]:from-gray-800 [&[data-slot=sidebar-container]]:to-gray-900 [&[data-slot=sidebar-container]]:border-r [&[data-slot=sidebar-container]]:border-teal-500/20 [&[data-slot=sidebar-inner]]:bg-gradient-to-br [&[data-slot=sidebar-inner]]:from-gray-800 [&[data-slot=sidebar-inner]]:to-gray-900"
       {...props}
     >
-      <SidebarHeader className="bg-transparent" />
+      <SidebarHeader className="bg-transparent">
+        <Avatar className="h-12 w-12 rounded-xl bg-slate-700 ring-2 ring-teal-400/50">
+          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarFallback className="rounded-xl text-slate-200 text-2xl font-semibold">
+            {user.name.charAt(0).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+      </SidebarHeader>
       <SidebarContent className="bg-transparent">
         <NavMain items={data.navMain} />
       </SidebarContent>
