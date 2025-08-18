@@ -16,7 +16,7 @@ interface Activity {
   image_url: string | null;
   start_time: string | null;
   deadline: string | null;
-  created_at: string | null; // Added to match ClassDetailsPage
+  created_at: string | null;
 }
 
 interface ActivitiesListProps {
@@ -32,14 +32,12 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
   const [uploadError, setUploadError] = useState<{ [key: string]: string | null }>({});
   const [uploadSuccess, setUploadSuccess] = useState<{ [key: string]: boolean }>({});
   const [section, setSection] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [studentId, setStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("ActivitiesList received activities:", activities);
 
-    // Fetch section and studentId
-    const fetchSectionAndStudentId = async () => {
+    // Fetch section
+    const fetchSection = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError || !session || !session.user) {
@@ -47,8 +45,6 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
           setUploadError((prev) => ({ ...prev, [classId]: "Please log in to upload files." }));
           return;
         }
-
-        setStudentId(session.user.id);
 
         const { data: sectionData, error: sectionError } = await supabase
           .rpc("get_student_class_section", {
@@ -79,7 +75,7 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
       }
     };
 
-    fetchSectionAndStudentId();
+    fetchSection();
 
     // Fetch signed URLs for images
     const fetchSignedUrls = async () => {
@@ -157,9 +153,11 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
 
   const handleSubmitActivity = async (activityId: string, file: File) => {
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("No session available");
+      // Refresh session to ensure a valid token
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      console.log("Refreshed session:", session ? "Valid" : "Invalid", "Session Error:", sessionError?.message);
+      if (sessionError || !session || !session.user) {
+        throw new Error("No valid session available. Please log in again.");
       }
 
       if (!section) {
@@ -179,21 +177,27 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
         throw new Error("Unsupported file type. Please upload .py, .c, .cpp, or .java files.");
       }
 
-      // Read file content as text
       const fileContent = await file.text();
+      if (!fileContent.trim()) {
+        throw new Error("File is empty.");
+      }
 
-      const fileName = file.name;
+      const timestamp = Date.now();
+      const safeFileName = `${file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.+/g, ".")}-${timestamp}.${fileExtension}`;
       const requestBody = {
         code: fileContent,
         classId,
         activityId,
         language: fileExtension,
-        fileName,
+        fileName: safeFileName,
         section,
         studentId: session.user.id,
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token || '',
       };
 
       console.log("Submitting to /api/studentsubmit_code with body:", requestBody);
+      console.log("Authorization header:", `Bearer ${session.access_token}`);
 
       const response = await fetch("/api/studentsubmit_code", {
         method: "POST",
@@ -205,18 +209,9 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
       });
 
       const data = await response.json();
-      console.log("API Response:", response.status, data);
+      console.log("API Response:", { status: response.status, statusText: response.statusText, data });
       if (!response.ok) {
         throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
-      }
-
-      const filePath = `submissions/${section}/${session.user.id}/${fileName}`;
-      const { error: uploadError } = await supabase.storage
-        .from("submissions")
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) {
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
       }
 
       setUploadSuccess((prev) => ({ ...prev, [activityId]: true }));

@@ -189,221 +189,263 @@ export default function SubmissionViewPage() {
     setIsRunning(false);
   };
 
- useEffect(() => {
-  const initialize = async () => {
-    setIsLoading(true);
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-          subscription.unsubscribe();
-          proceedWithSession();
-        }
-      });
-
-      const proceedWithSession = async () => {
-        try {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError || !session) {
-            console.warn("No session found:", sessionError?.message);
-            router.push("/login");
-            return;
+  useEffect(() => {
+    const initialize = async () => {
+      setIsLoading(true);
+      try {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+          if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+            subscription.unsubscribe();
+            proceedWithSession();
           }
+        });
 
-          const { data: { user }, error: authError } = await supabase.auth.getUser();
-          if (authError || !user) {
-            console.warn("Auth error:", authError?.message);
-            router.push("/login");
-            return;
-          }
+        const proceedWithSession = async () => {
+          try {
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+            if (sessionError || !session) {
+              console.warn("No session found:", sessionError?.message);
+              router.push("/login");
+              return;
+            }
 
-          const role = await getUserRole();
-          console.log("getUserRole - Profile fetched:", role);
-          if (!role || role !== "professor") {
-            console.warn("Invalid role or no role found:", role);
-            router.push("/dashboard/student");
-            return;
-          }
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+              console.warn("Auth error:", authError?.message);
+              router.push("/login");
+              return;
+            }
 
-          const { data: classDataArray, error: classError } = await supabase
-            .rpc("get_professor_classes")
-            .eq("id", classId);
+            const role = await getUserRole();
+            console.log("getUserRole - Profile fetched:", role);
+            if (!role || role !== "professor") {
+              console.warn("Invalid role or no role found:", role);
+              router.push("/dashboard/student");
+              return;
+            }
 
-          if (classError || !classDataArray || classDataArray.length === 0) {
-            console.warn("Failed to fetch class:", classError?.message);
-            router.push("/dashboard/professor");
-            return;
-          }
+            const { data: classDataArray, error: classError } = await supabase
+              .rpc("get_professor_classes")
+              .eq("id", classId);
 
-          const classData = classDataArray[0] as Class;
-          setClassData(classData);
+            if (classError || !classDataArray || classDataArray.length === 0) {
+              console.warn("Failed to fetch class:", classError?.message);
+              router.push("/dashboard/professor");
+              return;
+            }
 
-          const [studentId, requestedFileName] = decodeURIComponent(submissionId as string).split("/");
-          setFileName(requestedFileName);
-          const detectedLang = detectLanguageFromFileName(requestedFileName);
-          if (!detectedLang || !supportedLanguages.includes(detectedLang)) {
-            setError((prev) => [...prev, "Unsupported language detected"]);
-          } else {
-            setLanguage(detectedLang);
-          }
+            const classData = classDataArray[0] as Class;
+            setClassData(classData);
 
-          const { data: studentData, error: studentError } = await supabase
-            .rpc("get_class_student_profiles", { class_id_input: classId })
-            .eq("student_id", studentId);
-          console.log("Student Data:", studentData);
-          if (studentError || !studentData || studentData.length === 0) {
-            console.warn("Failed to fetch student:", studentError?.message);
-            setError((prev) => [...prev, "Student not found"]);
-            setStudentName("Unknown");
-          } else {
-            const student = studentData[0] as StudentProfile;
-            setStudentName(`${student.first_name} ${student.last_name}`.trim());
-          }
+            const [studentId, requestedFileName] = decodeURIComponent(submissionId as string).split("/");
+            setFileName(requestedFileName);
+            const detectedLang = detectLanguageFromFileName(requestedFileName);
+            if (!detectedLang || !supportedLanguages.includes(detectedLang)) {
+              setError((prev) => [...prev, "Unsupported language detected"]);
+            } else {
+              setLanguage(detectedLang);
+            }
 
-          const { data: submissionData, error: submissionQueryError } = await supabase
-            .from("submissions")
-            .select("*")
-            .eq("class_id", classId)
-            .eq("student_id", studentId)
-            .eq("file_name", requestedFileName)
-            .maybeSingle();
-          if (submissionQueryError) {
-            console.warn("Failed to fetch submission data:", submissionQueryError.message);
-            setError((prev) => [...prev, "Submission not found"]);
-            return;
-          }
+            const { data: studentData, error: studentError } = await supabase
+              .rpc("get_class_student_profiles", { class_id_input: classId })
+              .eq("student_id", studentId);
+            console.log("Student Data:", studentData);
+            if (studentError || !studentData || studentData.length === 0) {
+              console.warn("Failed to fetch student:", studentError?.message);
+              setError((prev) => [...prev, "Student not found"]);
+              setStudentName("Unknown");
+            } else {
+              const student = studentData[0] as StudentProfile;
+              setStudentName(`${student.first_name} ${student.last_name}`.trim());
+            }
 
-          const dbFileName = submissionData.file_name;
-          const filePath = submissionData.file_path || `submissions/${classData.section}/${studentId}/${submissionData.activity_id}/${dbFileName}`;
-          console.log("Attempting to download file from path:", filePath);
-          const { data: fileData, error: fileError } = await supabase.storage
-            .from("submissions")
-            .download(filePath);
-          if (fileError) {
-            console.warn("Failed to fetch submission file:", fileError.message, "Path:", filePath);
-            setError((prev) => [...prev, `Failed to load submission file: ${fileError.message}`]);
-            return;
-          }
-          const text = await fileData.text();
-          setCode(text);
+            const { data: submissionData, error: submissionQueryError } = await supabase
+              .from("submissions")
+              .select("*")
+              .eq("class_id", classId)
+              .eq("student_id", studentId)
+              .eq("file_name", requestedFileName)
+              .maybeSingle();
+            if (submissionQueryError) {
+              console.warn("Failed to fetch submission data:", submissionQueryError.message);
+              setError((prev) => [...prev, "Submission not found"]);
+              return;
+            }
 
-          await Promise.all([
-            (async () => {
-              console.log("Attempting AI detection...");
-              if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
-                console.error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
-                setAiError("AI detection service unavailable.");
-                return;
-              }
-              try {
-                const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL, {
+            const dbFileName = submissionData.file_name;
+            const filePath = submissionData.file_path || `submissions/${classData.section}/${studentId}/${submissionData.activity_id}/${dbFileName}`;
+            console.log("Attempting to download file from path:", filePath);
+            const { data: fileData, error: fileError } = await supabase.storage
+              .from("submissions")
+              .download(filePath);
+            if (fileError) {
+              console.warn("Failed to fetch submission file:", fileError.message, "Path:", filePath);
+              setError((prev) => [...prev, `Failed to load submission file: ${fileError.message}`]);
+              return;
+            }
+            const text = await fileData.text();
+            setCode(text);
+
+            await Promise.all([
+              (async () => {
+                console.log("Attempting AI detection...");
+                if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL) {
+                  console.error("NEXT_PUBLIC_AI_DETECTOR_URL is not defined");
+                  setAiError("AI detection service unavailable.");
+                  return;
+                }
+                try {
+                  const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: text }),
+                  });
+                  console.log("AI API Response:", response.status);
+                  if (!response.ok) throw new Error(`AI detection failed: ${response.statusText}`);
+                  const result = await response.json();
+                  console.log("AI detection result:", result);
+                  const percentage = result.ai_percentage || 0;
+                  setAiPercentage(percentage);
+                  await supabase
+                    .from("submissions")
+                    .update({ ai_percentage: percentage })
+                    .eq("id", submissionData.id);
+                } catch (err) {
+                  console.error("AI detection error:", err);
+                  setAiError(err instanceof Error ? err.message : "AI detection failed.");
+                }
+              })(),
+              (async () => {
+                if (!submissionData.activity_id) {
+                  console.warn("No activity_id found for submission");
+                  setError((prev) => [...prev, "Cannot perform similarity detection: No activity associated"]);
+                  return;
+                }
+
+                const { data: allSubmissions, error: fetchError } = await supabase
+                  .from("submissions")
+                  .select("*")
+                  .eq("class_id", classId)
+                  .eq("activity_id", submissionData.activity_id);
+                if (fetchError) {
+                  console.warn("Failed to fetch submissions for similarity:", fetchError.message);
+                  setError((prev) => [...prev, "Failed to fetch submissions for similarity detection"]);
+                  return;
+                }
+
+                if (allSubmissions.length < 3) {
+                  console.warn("Not enough submissions for similarity detection:", allSubmissions.length);
+                  setError((prev) => [
+                    ...prev,
+                    `Not enough submissions for similarity detection (minimum 3 required). Found: ${allSubmissions.length}`,
+                  ]);
+                  return;
+                }
+
+                const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
+                  const expectedFilePath =
+                    sub.file_path || `submissions/${classData.section}/${sub.student_id}/${sub.activity_id}/${sub.file_name}`;
+                  const { data: fileData, error: downloadError } = await supabase.storage
+                    .from("submissions")
+                    .download(expectedFilePath);
+                  if (downloadError) {
+                    console.warn("Failed to download submission file:", downloadError.message);
+                    return null;
+                  }
+                  const codeText = await fileData.text();
+                  const { data: studentData } = await supabase
+                    .rpc("get_class_student_profiles", { class_id_input: classId })
+                    .eq("student_id", sub.student_id);
+                  const student = studentData?.[0] as StudentProfile;
+                  return codeText && typeof codeText === "string" && codeText.trim()
+                    ? {
+                        ...sub,
+                        code: codeText,
+                        student_name: student ? `${student.first_name} ${student.last_name}`.trim() : "Unknown",
+                      }
+                    : null;
+                });
+                const submissionsWithCode = (await Promise.all(submissionsWithCodePromises)).filter(
+                  (sub): sub is Submission => sub !== null
+                );
+                console.log(
+                  "Submissions with code for activity:",
+                  submissionsWithCode.map((s) => `${s.student_name} - ${s.file_name}`)
+                );
+
+                if (submissionsWithCode.length < 3) {
+                  console.warn("Not enough valid submissions for similarity detection:", submissionsWithCode.length);
+                  setError((prev) => [
+                    ...prev,
+                    `Not enough valid submissions for similarity detection (minimum 3 required). Found: ${submissionsWithCode.length}`,
+                  ]);
+                  return;
+                }
+
+                const codes = submissionsWithCode.map((sub) => sub.code);
+                if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
+                  console.error("NEXT_PUBLIC_SIMILARITY_DETECTOR_URL is not defined");
+                  setError((prev) => [...prev, "Similarity detection service unavailable."]);
+                  return;
+                }
+
+                const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ code: text }),
+                  body: JSON.stringify({ codes }),
                 });
-                console.log("AI API Response:", response.status); // Remove response.text() to avoid consuming the stream
-                if (!response.ok) throw new Error(`AI detection failed: ${response.statusText}`);
+                console.log("Similarity API Response:", response.status);
+                if (!response.ok) throw new Error(`Similarity detection failed: ${response.statusText}`);
                 const result = await response.json();
-                console.log("AI detection result:", result);
-                const percentage = result.ai_percentage || 0;
-                setAiPercentage(percentage);
-                await supabase
-                  .from("submissions")
-                  .update({ ai_percentage: percentage })
-                  .eq("id", submissionData.id);
-              } catch (err) {
-                console.error("AI detection error:", err);
-                setAiError(err instanceof Error ? err.message : "AI detection failed.");
-              }
-            })(),
-          (async () => {
-  const { data: allSubmissions, error: fetchError } = await supabase
-    .from("submissions")
-    .select("*")
-    .eq("class_id", classId);
-  if (fetchError) {
-    console.warn("Failed to fetch submissions for similarity:", fetchError.message);
-    setError((prev) => [...prev, "Failed to fetch submissions for similarity detection"]);
-    return;
-  }
-  const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
-    const expectedFilePath = sub.file_path || `submissions/${classData.section}/${sub.student_id}/${sub.activity_id}/${sub.file_name}`;
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from("submissions")
-      .download(expectedFilePath);
-    if (downloadError) {
-      console.warn("Failed to download submission file:", downloadError.message);
-      return null;
-    }
-    const codeText = await fileData.text();
-    const { data: studentData } = await supabase
-      .rpc("get_class_student_profiles", { class_id_input: classId })
-      .eq("student_id", sub.student_id);
-    const student = studentData?.[0] as StudentProfile;
-    return codeText && typeof codeText === "string" && codeText.trim()
-      ? { ...sub, code: codeText, student_name: student ? `${student.first_name} ${student.last_name}`.trim() : "Unknown" }
-      : null;
-  });
-  const submissionsWithCode = (await Promise.all(submissionsWithCodePromises)).filter(
-    (sub): sub is Submission => sub !== null
-  );
-  console.log("Submissions with code:", submissionsWithCode.map(s => `${s.student_name} - ${s.file_name}`));
-  if (submissionsWithCode.length < 2) {
-    console.warn("Not enough valid submissions for similarity detection:", submissionsWithCode.length);
-    setError((prev) => [...prev, "Not enough valid submissions for similarity detection (minimum 2 required)."]);
-    return;
-  }
-  const codes = submissionsWithCode.map((sub) => sub.code);
-  if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
-    console.error("NEXT_PUBLIC_SIMILARITY_DETECTOR_URL is not defined");
-    setError((prev) => [...prev, "Similarity detection service unavailable."]);
-    return;
-  }
-  const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ codes }),
-  });
-  console.log("Similarity API Response:", response.status);
-  if (!response.ok) throw new Error(`Similarity detection failed: ${response.statusText}`);
-  const result = await response.json();
-  console.log("Similarity detection result:", result);
-  const similarities = result.similarities || {};
-  const currentCodeIndex = submissionsWithCode.findIndex(
-    (sub) => sub.student_id === studentId && sub.file_name === dbFileName
-  );
-  console.log("Current code index:", currentCodeIndex, "for", `${studentId}/${dbFileName}`);
-  const similar = submissionsWithCode
-    .filter((sub, idx) => idx !== currentCodeIndex) // Exclude self
-    .map((sub) => {
-      const originalIdx = submissionsWithCode.findIndex(s => s.id === sub.id);
-      const key = currentCodeIndex < originalIdx ? `${currentCodeIndex}-${originalIdx}` : `${originalIdx}-${currentCodeIndex}`;
-      return { ...sub, similarity_percentage: similarities[key] || 0 };
-    });
-  setSimilarSubmissions(similar);
-})(),
-          ]);
-        } catch (err) {
-          console.error("Unexpected error:", err);
-          router.push("/dashboard/professor");
-        } finally {
-          setIsLoading(false);
-        }
-      };
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      router.push("/dashboard/professor");
-    }
-  };
+                console.log("Similarity detection result:", result);
+                const similarities = result.similarities || {};
+                const currentCodeIndex = submissionsWithCode.findIndex(
+                  (sub) => sub.student_id === studentId && sub.file_name === dbFileName
+                );
+                console.log("Current code index:", currentCodeIndex, "for", `${studentId}/${dbFileName}`);
+                const similar = submissionsWithCode
+                  .filter((sub, idx) => idx !== currentCodeIndex) // Exclude self
+                  .map((sub) => {
+                    const originalIdx = submissionsWithCode.findIndex((s) => s.id === sub.id);
+                    const key =
+                      currentCodeIndex < originalIdx
+                        ? `${currentCodeIndex}-${originalIdx}`
+                        : `${originalIdx}-${currentCodeIndex}`;
+                    return { ...sub, similarity_percentage: similarities[key] || 0 };
+                  });
+                setSimilarSubmissions(similar);
+              })(),
+            ]);
+          } catch (err) {
+            console.error("Unexpected error:", err);
+            router.push("/dashboard/professor");
+          } finally {
+            setIsLoading(false);
+          }
+        };
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        router.push("/dashboard/professor");
+      }
+    };
 
-  initialize();
-}, [classId, submissionId, router]);
+    initialize();
+  }, [classId, submissionId, router]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        Loading...
+      </div>
+    );
   }
 
   if (!classData) {
-    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Class not found.</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        Class not found.
+      </div>
+    );
   }
 
   return (
@@ -453,9 +495,7 @@ export default function SubmissionViewPage() {
           <div className="max-w-7xl mx-auto space-y-4">
             <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
               <CardHeader className="border-b border-teal-500/20">
-                <CardTitle className="text-2xl font-semibold text-teal-400">
-                  Submission: {fileName}
-                </CardTitle>
+                <CardTitle className="text-2xl font-semibold text-teal-400">Submission: {fileName}</CardTitle>
                 <p className="text-sm text-teal-300">Submitted by {studentName}</p>
               </CardHeader>
               <CardContent className="pt-4">
@@ -463,7 +503,9 @@ export default function SubmissionViewPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                       <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Editor</h3>
-                      <Label className="text-sm font-medium text-teal-300">Submitted Code ({language || "unknown"})</Label>
+                      <Label className="text-sm font-medium text-teal-300">
+                        Submitted Code ({language || "unknown"})
+                      </Label>
                       <AceEditor
                         mode={
                           language === "cpp" || language === "c"
@@ -515,9 +557,7 @@ export default function SubmissionViewPage() {
                           </div>
                         ))}
                         {error.map((line, index) => (
-                          <div key={`error-${index}`} className="text-red-400">
-                            {line}
-                          </div>
+                          <div key={`error-${index}`} className="text-red-400">{line}</div>
                         ))}
                       </div>
                     </div>
@@ -539,7 +579,15 @@ export default function SubmissionViewPage() {
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Similarity</h3>
                     <div className="space-y-2">
-                      {similarSubmissions.length === 0 ? (
+                      {error.some((err) =>
+                        err.includes("Not enough valid submissions for similarity detection")
+                      ) ? (
+                        <p className="text-red-400 text-center">
+                          {error.find((err) =>
+                            err.includes("Not enough valid submissions for similarity detection")
+                          )}
+                        </p>
+                      ) : similarSubmissions.length === 0 ? (
                         <p className="text-teal-300 text-center">No similar submissions found.</p>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -572,7 +620,8 @@ export default function SubmissionViewPage() {
                           {similarSubmissions.map((sub, index) => (
                             <div key={index} className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
                               <h4 className="text-md font-semibold text-teal-400 mb-2">
-                                {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
+                                {sub.student_name} - {sub.file_name} (Similarity:{" "}
+                                {sub.similarity_percentage?.toFixed(2)}%)
                               </h4>
                               <AceEditor
                                 mode={
