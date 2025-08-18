@@ -16,6 +16,7 @@ interface Activity {
   image_url: string | null;
   start_time: string | null;
   deadline: string | null;
+  created_at: string | null; // Added to match ClassDetailsPage
 }
 
 interface ActivitiesListProps {
@@ -230,16 +231,23 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
     }
   };
 
+  // Sort activities by created_at in descending order (newest first)
+  const sortedActivities = [...activities].sort((a, b) => {
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return dateB - dateA;
+  });
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-      {activities.length === 0 ? (
+      {sortedActivities.length === 0 ? (
         <Card className="rounded-lg bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-teal-500/30 backdrop-blur-sm">
           <CardContent className="pt-6">
             <p className="text-gray-300 text-center py-8 text-lg font-medium">No activities created yet.</p>
           </CardContent>
         </Card>
       ) : (
-        activities.map((activity) => (
+        sortedActivities.map((activity) => (
           <article key={activity.id}>
             <Card
               className="relative rounded-lg border-teal-500/30 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 ease-out h-[360px] flex flex-col overflow-hidden"
