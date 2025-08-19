@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Upload, FileText, Image as ImageIcon } from "lucide-react";
+import { Upload, FileText, Image as ImageIcon, File, CheckCircle } from "lucide-react";
 
 interface Activity {
   id: string;
@@ -17,6 +17,14 @@ interface Activity {
   start_time: string | null;
   deadline: string | null;
   created_at: string | null;
+}
+
+interface Submission {
+  id: string;
+  file_name: string;
+  file_path: string;
+  is_viewed: boolean;
+  ai_percentage: number | null;
 }
 
 interface ActivitiesListProps {
@@ -29,6 +37,12 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
   const [isDescriptionDialogOpen, setIsDescriptionDialogOpen] = useState<{ [key: string]: boolean }>({});
   const [isImageDialogOpen, setIsImageDialogOpen] = useState<{ [key: string]: boolean }>({});
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState<{ [key: string]: boolean }>({});
+  const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState<{ [key: string]: boolean }>({});
+  const [submissionFileName, setSubmissionFileName] = useState<{ [key: string]: string[] }>({});
+  const [submissionIsViewed, setSubmissionIsViewed] = useState<{ [key: string]: boolean[] }>({});
+  const [submissionAiPercentage, setSubmissionAiPercentage] = useState<{ [key: string]: (number | null)[] }>({});
+  const [submissionError, setSubmissionError] = useState<{ [key: string]: string | null }>({});
+  const [hasSubmission, setHasSubmission] = useState<{ [key: string]: boolean }>({});
   const [uploadError, setUploadError] = useState<{ [key: string]: string | null }>({});
   const [uploadSuccess, setUploadSuccess] = useState<{ [key: string]: boolean }>({});
   const [section, setSection] = useState<string | null>(null);
@@ -75,7 +89,53 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
       }
     };
 
+    // Fetch submissions to determine if "View File Submission" button should be shown
+    const fetchSubmissions = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session || !session.user) {
+          console.error("No session for submissions:", sessionError?.message);
+          return;
+        }
+
+        const submissionStatus: { [key: string]: boolean } = {};
+        const fileNames: { [key: string]: string[] } = {};
+        const isViewed: { [key: string]: boolean[] } = {};
+        const aiPercentages: { [key: string]: (number | null)[] } = {};
+
+        for (const activity of activities) {
+          const { data: submissionData, error: submissionError } = await supabase
+            .from("submissions")
+            .select("id, file_name, file_path, is_viewed, ai_percentage")
+            .eq("class_id", classId)
+            .eq("activity_id", activity.id)
+            .eq("student_id", session.user.id)
+            .order("submitted_at", { ascending: false });
+          console.log(`Submission data for activity ${activity.id}:`, submissionData);
+          if (submissionError) {
+            console.error(`Failed to fetch submission for activity ${activity.id}:`, submissionError.message);
+            submissionStatus[activity.id] = false;
+            fileNames[activity.id] = [];
+            isViewed[activity.id] = [];
+            aiPercentages[activity.id] = [];
+          } else {
+            submissionStatus[activity.id] = submissionData && submissionData.length > 0;
+            fileNames[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.file_name) : [];
+            isViewed[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.is_viewed || false) : [];
+            aiPercentages[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.ai_percentage || null) : [];
+          }
+        }
+        setHasSubmission(submissionStatus);
+        setSubmissionFileName(fileNames);
+        setSubmissionIsViewed(isViewed);
+        setSubmissionAiPercentage(aiPercentages);
+      } catch (err) {
+        console.error("Unexpected error fetching submissions:", err);
+      }
+    };
+
     fetchSection();
+    fetchSubmissions();
 
     // Fetch signed URLs for images
     const fetchSignedUrls = async () => {
@@ -151,6 +211,54 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
     setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
   };
 
+  const handleViewSubmission = async (activityId: string) => {
+    try {
+      setSubmissionError((prev) => ({ ...prev, [activityId]: null }));
+      setSubmissionFileName((prev) => ({ ...prev, [activityId]: [] }));
+      setSubmissionIsViewed((prev) => ({ ...prev, [activityId]: [] }));
+      setSubmissionAiPercentage((prev) => ({ ...prev, [activityId]: [] }));
+      setIsSubmissionDialogOpen((prev) => ({ ...prev, [activityId]: true }));
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session || !session.user) {
+        throw new Error("No valid session available. Please log in again.");
+      }
+
+      const { data: submissionData, error: submissionError } = await supabase
+        .from("submissions")
+        .select("id, file_name, file_path, is_viewed, ai_percentage")
+        .eq("class_id", classId)
+        .eq("activity_id", activityId)
+        .eq("student_id", session.user.id)
+        .order("submitted_at", { ascending: false });
+      console.log(`Submission data for activity ${activityId}:`, submissionData);
+      if (submissionError) {
+        console.error(`Failed to fetch submission for activity ${activityId}:`, submissionError.message);
+        throw new Error("Failed to load submissions.");
+      }
+
+      setSubmissionFileName((prev) => ({
+        ...prev,
+        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.file_name) : [],
+      }));
+      setSubmissionIsViewed((prev) => ({
+        ...prev,
+        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.is_viewed || false) : [],
+      }));
+      setSubmissionAiPercentage((prev) => ({
+        ...prev,
+        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.ai_percentage || null) : [],
+      }));
+      if (!submissionData || submissionData.length === 0) {
+        throw new Error("No submissions found for this activity.");
+      }
+    } catch (error) {
+      console.error("View submission error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to load submissions";
+      setSubmissionError((prev) => ({ ...prev, [activityId]: errorMessage }));
+    }
+  };
+
   const handleSubmitActivity = async (activityId: string, file: File) => {
     try {
       // Refresh session to ensure a valid token
@@ -180,6 +288,22 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
       const fileContent = await file.text();
       if (!fileContent.trim()) {
         throw new Error("File is empty.");
+      }
+
+      // Check for duplicate file_name
+      const { data: existingSubmission, error: existingError } = await supabase
+        .from("submissions")
+        .select("id")
+        .eq("class_id", classId)
+        .eq("activity_id", activityId)
+        .eq("student_id", session.user.id)
+        .eq("file_name", file.name);
+      if (existingError) {
+        console.error("Error checking existing file name:", existingError.message);
+        throw new Error("Failed to check for duplicate file names.");
+      }
+      if (existingSubmission && existingSubmission.length > 0) {
+        throw new Error("A file with this name has already been submitted for this activity.");
       }
 
       const timestamp = Date.now();
@@ -215,6 +339,29 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
       }
 
       setUploadSuccess((prev) => ({ ...prev, [activityId]: true }));
+      setHasSubmission((prev) => ({ ...prev, [activityId]: true }));
+      // Refresh submissions after upload
+      const { data: submissionData } = await supabase
+        .from("submissions")
+        .select("id, file_name, file_path, is_viewed, ai_percentage")
+        .eq("class_id", classId)
+        .eq("activity_id", activityId)
+        .eq("student_id", session.user.id)
+        .order("submitted_at", { ascending: false });
+      if (submissionData) {
+        setSubmissionFileName((prev) => ({
+          ...prev,
+          [activityId]: submissionData.map((sub: Submission) => sub.file_name),
+        }));
+        setSubmissionIsViewed((prev) => ({
+          ...prev,
+          [activityId]: submissionData.map((sub: Submission) => sub.is_viewed || false),
+        }));
+        setSubmissionAiPercentage((prev) => ({
+          ...prev,
+          [activityId]: submissionData.map((sub: Submission) => sub.ai_percentage || null),
+        }));
+      }
       setTimeout(() => {
         setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: false }));
         setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
@@ -226,12 +373,12 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
     }
   };
 
-  // Sort activities by created_at in descending order (newest first)
-  const sortedActivities = [...activities].sort((a, b) => {
-    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return dateB - dateA;
-  });
+// Sort activities by created_at in descending order (newest first)
+const sortedActivities = [...activities].sort((a, b) => {
+  const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return dateB - dateA;
+});
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
@@ -285,6 +432,29 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
                       <ImageIcon className="w-4 h-4 mr-1" />
                       Image
                     </Button>
+                  )}
+                  {hasSubmission[activity.id] && (
+                    <div className="flex items-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-teal-300 hover:text-teal-200 hover:bg-teal-500/20"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewSubmission(activity.id);
+                        }}
+                        aria-label={`View file submissions for ${activity.title || "Untitled Activity"}`}
+                      >
+                        <File className="w-4 h-4 mr-1" />
+                        View File Submissions
+                      </Button>
+                      {submissionIsViewed[activity.id].some((viewed) => viewed) && (
+                        <CheckCircle
+                          className="w-4 h-4 ml-2 text-teal-400"
+                          aria-label="At least one submission viewed by professor"
+                        />
+                      )}
+                    </div>
                   )}
                   <Button
                     variant="ghost"
@@ -369,6 +539,62 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
                   <DialogFooter className="mt-4">
                     <Button
                       onClick={() => setIsImageDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
+                    >
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Dialog
+                open={isSubmissionDialogOpen[activity.id] || false}
+                onOpenChange={(open) => setIsSubmissionDialogOpen((prev) => ({ ...prev, [activity.id]: open }))}
+              >
+                <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="text-2xl font-extrabold text-teal-400">
+                      {activity.title || "Untitled Activity"} File Submissions
+                    </DialogTitle>
+                    <DialogDescription className="text-teal-300 text-sm">
+                      Your submitted files for this activity
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="text-teal-200 text-base max-h-[50vh] overflow-y-auto">
+                    {submissionError[activity.id] ? (
+                      <p className="text-red-400">{submissionError[activity.id]}</p>
+                    ) : submissionFileName[activity.id]?.length > 0 ? (
+                      <div className="flex flex-col gap-4">
+                        {submissionFileName[activity.id].map((fileName, index) => (
+                          <div key={index} className="border-b border-teal-500/30 pb-2">
+                            <p><span className="font-semibold">File {index + 1}:</span> {fileName}</p>
+                            <p>
+                              <span className="font-semibold">Professor Viewed:</span>{" "}
+                              {submissionIsViewed[activity.id][index] ? (
+                                <span className="text-teal-400 flex items-center">
+                                  Yes <CheckCircle className="w-4 h-4 ml-1" />
+                                </span>
+                              ) : (
+                                "No"
+                              )}
+                            </p>
+                            <p>
+                              <span className="font-semibold">AI-Generated Percentage:</span>{" "}
+                              {submissionAiPercentage[activity.id][index] !== null ? (
+                                `${submissionAiPercentage[activity.id][index]?.toFixed(2)}%`
+                              ) : (
+                                <span className="text-teal-300">Not yet analyzed</span>
+                              )}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>No submissions found.</p>
+                    )}
+                  </div>
+                  <DialogFooter className="mt-4">
+                    <Button
+                      onClick={() => setIsSubmissionDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
                       className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
                     >
                       Close

@@ -211,12 +211,7 @@ export default function LoginPage() {
               />
               CARMA
             </Link>
-            <h1 className="text-xl md:text-2xl font-bold text-center text-teal-400 mb-0.5 md:mb-1">
-              Welcome Back
-            </h1>
-            <p className="text-gray-400 text-center mb-0.5 md:mb-1 text-xs md:text-sm">
-              Enter your credentials to access your account
-            </p>
+      
             <LoginForm
               email={email}
               setEmail={setEmail}
