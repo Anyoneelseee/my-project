@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, Fragment } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import AceEditor from "react-ace";
@@ -31,12 +31,10 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
   const [code, setCode] = useState<string>("");
   const [output, setOutput] = useState<string[]>([]);
   const [language, setLanguage] = useState<string>("python");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [submissions, setSubmissions] = useState<string[]>([]);
   const [section, setSection] = useState<string | null>(null);
   const [error, setError] = useState<string[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
   const [showApiLimitDialog, setShowApiLimitDialog] = useState(false);
   const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false);
   const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
@@ -314,108 +312,6 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
     logActivity("Saved Code");
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setCode(e.target?.result as string);
-      };
-      reader.readAsText(file);
-      logActivity("Uploaded File");
-    }
-  };
-
-  async function handleSubmitActivity() {
-    try {
-      setIsSubmitting(true);
-      const editorValue = editorRef.current?.editor.getValue();
-      const code = editorValue ?? "";
-      console.log("Editor value:", editorValue, "Code state:", code);
-      const fileExtension = language === "python" ? "py" : language === "cpp" ? "cpp" : language === "c" ? "c" : "java";
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        throw new Error("No session available");
-      }
-
-      if (!section) {
-        throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
-      }
-
-      if (!code.trim() && !selectedFile) {
-        throw new Error("Code or file cannot be empty for submission");
-      }
-
-      if (!classId) {
-        throw new Error("Class ID is missing");
-      }
-
-      const activityId = prompt("Enter the Activity ID for this submission (optional):");
-      const defaultFileName = `submission-${Date.now()}.${fileExtension}`;
-      const fileName = selectedFile?.name || defaultFileName;
-
-      const requestBody = {
-        code: code.trim() || null,
-        classId,
-        activityId: activityId || null,
-        language: fileExtension,
-        fileName,
-        section,
-        studentId: session.user.id,
-      };
-
-      console.log("Submitting to /api/studentsubmit_code with body:", requestBody);
-
-      const response = await fetch("/api/studentsubmit_code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-      console.log("API Response:", response.status, data);
-      if (!response.ok) {
-        throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
-      }
-
-      if (selectedFile) {
-        const filePath = `submissions/${section}/${session.user.id}/${fileName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("submissions")
-          .upload(filePath, selectedFile, { upsert: true });
-
-        if (uploadError) {
-          throw new Error(`Failed to upload file: ${uploadError.message}`);
-        }
-      }
-
-      alert(data.message);
-      setSelectedFile(null);
-      logActivity("Submitted Code");
-
-      const folderPath = `submissions/${section}/${session.user.id}`;
-      const { data: updatedFiles, error: listError } = await supabase.storage
-        .from("submissions")
-        .list(folderPath);
-      if (listError) {
-        console.error("Failed to refresh submissions:", listError.message);
-      } else {
-        setSubmissions(updatedFiles.map((file) => file.name));
-      }
-    } catch (error) {
-      console.error("Submission error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to submit activity";
-      alert(errorMessage);
-      setError((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   const handleCodeChange = (newCode: string) => {
     setCode(newCode);
     if (typingTimeoutRef.current) {
@@ -690,24 +586,6 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
               </div>
             </div>
             <div className="space-y-4">
-              <div className="flex gap-2">
-                <Button
-                  onClick={handleSubmitActivity}
-                  disabled={isSubmitting || !section || isRunning}
-                  className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white rounded-lg transition-all duration-200"
-                >
-                  Submit Activity
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  onChange={handleFileChange}
-                  className="p-2 bg-gray-700/50 border-gray-600 text-gray-200 rounded-lg w-full focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:opacity-50"
-                  accept=".py,.cpp,.c,.java"
-                  disabled={isSubmitting || isRunning}
-                />
-              </div>
               {submissions.length > 0 && (
                 <div>
                   <Label className="text-sm font-medium text-gray-200">Previous Submissions</Label>

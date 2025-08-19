@@ -182,28 +182,32 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
     return date.toString() === "Invalid Date" ? "Invalid Date" : date.toLocaleString();
   };
 
-  const getStatus = (start_time: string | null, deadline: string | null): { text: string; color: string } => {
-    const now = new Date();
-    const startDate = start_time ? new Date(start_time) : null;
-    const deadlineDate = deadline ? new Date(deadline) : null;
+  const getStatus = (start_time: string | null, deadline: string | null, activityId: string): { text: string; color: string } => {
+  const now = new Date();
+  const startDate = start_time ? new Date(start_time) : null;
+  const deadlineDate = deadline ? new Date(deadline) : null;
 
-    if (!start_time && !deadline) {
-      return { text: "No Dates Set", color: "bg-gray-600" };
-    }
-    if (startDate && startDate.getTime() > now.getTime()) {
-      return { text: "Not Started", color: "bg-blue-500" };
-    }
-    if (deadlineDate && deadlineDate.getTime() < now.getTime()) {
-      return { text: "Overdue", color: "bg-red-500" };
-    }
-    if (deadlineDate && deadlineDate.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
-      return { text: "Due Soon", color: "bg-yellow-500" };
-    }
-    if (startDate && startDate.getTime() <= now.getTime()) {
-      return { text: "In Progress", color: "bg-teal-500" };
-    }
-    return { text: "Upcoming", color: "bg-teal-500" };
-  };
+  if (hasSubmission[activityId]) {
+    return { text: "Submitted", color: "bg-green-500" };
+  }
+
+  if (!start_time && !deadline) {
+    return { text: "No Dates Set", color: "bg-gray-600" };
+  }
+  if (startDate && startDate.getTime() > now.getTime()) {
+    return { text: "Not Started", color: "bg-blue-500" };
+  }
+  if (deadlineDate && deadlineDate.getTime() < now.getTime()) {
+    return { text: "Overdue", color: "bg-red-500" };
+  }
+  if (deadlineDate && deadlineDate.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
+    return { text: "Due Soon", color: "bg-yellow-500" };
+  }
+  if (startDate && startDate.getTime() <= now.getTime()) {
+    return { text: "In Progress", color: "bg-teal-500" };
+  }
+  return { text: "Upcoming", color: "bg-teal-500" };
+};
 
   const handleUploadClick = (activityId: string) => {
     setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: true }));
@@ -399,9 +403,9 @@ const sortedActivities = [...activities].sort((a, b) => {
                 <CardTitle className="text-xl font-extrabold text-teal-400 truncate">
                   {activity.title || "Untitled Activity"}
                 </CardTitle>
-                <p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${getStatus(activity.start_time, activity.deadline).color} w-fit mt-1`}>
-                  {getStatus(activity.start_time, activity.deadline).text}
-                </p>
+<p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${getStatus(activity.start_time, activity.deadline, activity.id).color} w-fit mt-1`}>
+  {getStatus(activity.start_time, activity.deadline, activity.id).text}
+</p>
               </CardHeader>
               <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
                 <div className="flex gap-2 flex-wrap">

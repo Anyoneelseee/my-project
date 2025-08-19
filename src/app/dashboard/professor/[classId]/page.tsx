@@ -32,10 +32,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { CreateActivityDialog } from "../CreateActivityDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { CheckCircle } from "lucide-react";
+import { Book, CheckCircle, Code } from "lucide-react";
 import { ActivityCard } from "../ActivityCard";
 
 interface Class {
+  professorEmail: string;
+  professorName: string;
   id: string;
   name: string;
   section: string;
@@ -437,38 +439,48 @@ export default function ClassDetailsPage() {
               </button>
             </div>
 
-            {/* Overview */}
-            {activeTab === "overview" && (
-              <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-                <CardHeader className="border-b border-teal-500/20">
-                  <CardTitle className="text-2xl font-semibold text-teal-400">
-                    {classData.name}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6">
-                    <div>
-                      <p className="text-sm font-medium text-teal-300">Section</p>
-                      <p className="text-lg font-semibold text-teal-400">{classData.section}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-teal-300">Course</p>
-                      <p className="text-lg font-semibold text-teal-400">{classData.course}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-teal-300">Class Code</p>
-                      <p className="text-lg font-semibold text-teal-400">{classData.code}</p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={() => setIsActivityDialogOpen(true)}
-                    className="bg-teal-500 hover:bg-teal-600 text-white rounded-lg px-6 py-2 transition-colors"
-                  >
-                    Create Activity
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+{/* Overview */}
+{activeTab === "overview" && (
+  <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
+    <CardHeader className="border-b border-teal-500/20 py-4">
+      <CardTitle className="text-2xl md:text-3xl font-semibold text-teal-400">
+        {classData.name}
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="pt-6 space-y-6">
+      <div className="space-y-3">
+             <Button
+        onClick={() => setIsActivityDialogOpen(true)}
+        className="w-full sm:w-auto bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold rounded-lg px-8 py-3 transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 focus:ring-2 focus:ring-teal-400 focus:ring-opacity-50"
+      >
+        Create Activity
+      </Button>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-700/50">
+          <Book className="w-5 h-5 text-teal-300" />
+          <div>
+            <p className="text-sm font-medium text-teal-300">Course</p>
+            <p className="text-lg font-semibold text-teal-400">{classData.course}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-700/50">
+          <Book className="w-5 h-5 text-teal-300" />
+          <div>
+            <p className="text-sm font-medium text-teal-300">Section</p>
+            <p className="text-lg font-semibold text-teal-400">{classData.section}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-teal-500/30">
+          <Code className="w-5 h-5 text-teal-300" />
+          <div>
+            <p className="text-sm font-medium text-teal-300">Class Code</p>
+            <p className="text-lg font-semibold text-teal-400">{classData.code}</p>
+          </div>
+        </div>
+      </div>
+  
+    </CardContent>
+  </Card>
+)}
 
             {/* Students */}
             {activeTab === "students" && (
