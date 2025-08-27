@@ -17,6 +17,11 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: true,
     detectSessionInUrl: true,
   },
+  realtime: {
+    params: {
+      heartbeatIntervalMs: 30000, // Send heartbeat every 30s to prevent timeout
+    },
+  },
 });
 
 // Export server-side client function

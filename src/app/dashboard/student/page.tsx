@@ -33,13 +33,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { toast } from "sonner";
 import ClassCard from "./my-classes/[classId]/components/ClassCard";
+
 interface Class {
   id: string;
   name: string;
   section: string;
   course: string;
   code: string;
+  professor_id?: string;
 }
 
 export default function StudentDashboard() {
@@ -119,7 +122,13 @@ export default function StudentDashboard() {
 
   const handleJoinClass = async () => {
     if (!classCode) {
-      alert("Please enter a class code.");
+      toast.error("Please enter a class code.", {
+        style: {
+          background: theme === "light" ? "#f1f5f9" : "#1f2937",
+          color: theme === "light" ? "#0f172a" : "#e5e7eb",
+          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+        },
+      });
       return;
     }
 
@@ -142,19 +151,33 @@ export default function StudentDashboard() {
       const { data: classDataArray, error: classError } = await supabase
         .rpc("get_class_by_code", { class_code: normalizedClassCode });
 
-      if (classError) {
-        console.error("Error finding class:", classError.message, classError.details, classError.hint);
-        alert(classError.message || "Error occurred while searching for the class. Please try again.");
-        return;
-      }
-
-      if (!classDataArray || classDataArray.length === 0) {
-        console.log("No class found with code:", normalizedClassCode);
-        alert("Invalid class code. Please try again.");
+      if (classError || !classDataArray || classDataArray.length === 0) {
+        console.error("Error finding class:", classError?.message);
+        toast.error(classError?.message || "Invalid class code. Please try again.", {
+          style: {
+            background: theme === "light" ? "#f1f5f9" : "#1f2937",
+            color: theme === "light" ? "#0f172a" : "#e5e7eb",
+            border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+          },
+        });
         return;
       }
 
       const classData = classDataArray[0];
+
+      // Validate classData fields
+      if (!classData.id || !classData.name || !classData.professor_id) {
+        console.error("Invalid class data:", classData);
+        toast.error("Class data is incomplete. Please contact support.", {
+          style: {
+            background: theme === "light" ? "#f1f5f9" : "#1f2937",
+            color: theme === "light" ? "#0f172a" : "#e5e7eb",
+            border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+          },
+        });
+        return;
+      }
+
       console.log("Found class:", classData);
 
       const { error: joinError } = await supabase
@@ -163,12 +186,66 @@ export default function StudentDashboard() {
 
       if (joinError) {
         if (joinError.code === "23505") {
-          alert("You are already a member of this class.");
+          toast.error("You are already a member of this class.", {
+            style: {
+              background: theme === "light" ? "#f1f5f9" : "#1f2937",
+              color: theme === "light" ? "#0f172a" : "#e5e7eb",
+              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+            },
+          });
         } else {
           console.error("Error joining class:", joinError.message, joinError.details, joinError.hint);
-          alert("Failed to join class. Please try again.");
+          toast.error("Failed to join class. Please try again.", {
+            style: {
+              background: theme === "light" ? "#f1f5f9" : "#1f2937",
+              color: theme === "light" ? "#0f172a" : "#e5e7eb",
+              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+            },
+          });
         }
         return;
+      }
+
+      // Fetch student name from users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const studentName = userError || !userData || !userData.first_name
+        ? user.email || "Unknown User"
+        : `${userData.first_name}${userData.last_name ? ` ${userData.last_name}` : ""}`;
+      if (userError) {
+        console.error("Error fetching user data:", userError.message, userError.details, userError.hint);
+      }
+
+      const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert({
+          professor_id: classData.professor_id,
+          class_id: classData.id,
+          message: `Student ${studentName} joined your class "${classData.name}".`,
+          created_at: new Date().toISOString(),
+        });
+
+      if (notificationError) {
+        console.error("Error sending notification:", notificationError.message);
+        toast.success(`Class "${classData.name}" joined, but failed to notify professor.`, {
+          style: {
+            background: theme === "light" ? "#f1f5f9" : "#1f2937",
+            color: theme === "light" ? "#0f172a" : "#e5e7eb",
+            border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+          },
+        });
+      } else {
+        toast.success(`Successfully joined class "${classData.name}"!`, {
+          style: {
+            background: theme === "light" ? "#f1f5f9" : "#1f2937",
+            color: theme === "light" ? "#0f172a" : "#e5e7eb",
+            border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+          },
+        });
       }
 
       const { data, error: fetchError } = await supabase.rpc("get_student_classes");
@@ -190,10 +267,15 @@ export default function StudentDashboard() {
 
       setClassCode("");
       setIsJoinDialogOpen(false);
-      alert("Successfully joined the class!");
     } catch (err) {
       console.error("Unexpected error in join class:", err);
-      alert("An unexpected error occurred. Please try again.");
+      toast.error("An unexpected error occurred. Please try again.", {
+        style: {
+          background: theme === "light" ? "#f1f5f9" : "#1f2937",
+          color: theme === "light" ? "#0f172a" : "#e5e7eb",
+          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+        },
+      });
     }
   };
 

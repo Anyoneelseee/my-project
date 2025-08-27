@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateClassDialog } from "./CreateClassDialog";
 import { ClassCodeDialog } from "./ClassCodeDialog";
 import { ClassCard } from "./ClassCard";
+import { toast } from "sonner";
 import Link from "next/link";
 
 interface Class {
@@ -122,7 +123,13 @@ export default function ProfessorDashboard() {
 
   const handleCreateClass = async () => {
     if (!newClass.name || !newClass.section || !newClass.course) {
-      alert("Please fill in all fields.");
+      toast.error("Please fill in all fields.", {
+        style: {
+          background: "#1f2937",
+          color: "#e5e7eb",
+          border: "1px solid #2dd4bf",
+        },
+      });
       return;
     }
 
@@ -154,7 +161,13 @@ export default function ProfessorDashboard() {
 
       if (error) {
         console.warn("Failed to create class:", error.message);
-        alert("Failed to create class. Please try again.");
+        toast.error("Failed to create class. Please try again.", {
+          style: {
+            background: "#1f2937",
+            color: "#e5e7eb",
+            border: "1px solid #2dd4bf",
+          },
+        });
         return;
       }
 
@@ -180,9 +193,22 @@ export default function ProfessorDashboard() {
       setNewClass({ name: "", section: "", course: "" });
       setIsCreateDialogOpen(false);
       setIsCodeDialogOpen(true);
+      toast.success("Successfully created the class!", {
+        style: {
+          background: "#1f2937",
+          color: "#e5e7eb",
+          border: "1px solid #2dd4bf",
+        },
+      });
     } catch (err) {
       console.error("Unexpected error in create class:", err);
-      alert("An unexpected error occurred. Please try again.");
+      toast.error("An unexpected error occurred. Please try again.", {
+        style: {
+          background: "#1f2937",
+          color: "#e5e7eb",
+          border: "1px solid #2dd4bf",
+        },
+      });
     }
   };
 

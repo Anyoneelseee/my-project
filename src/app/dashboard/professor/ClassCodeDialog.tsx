@@ -1,5 +1,8 @@
+"use client";
+
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface ClassCodeDialogProps {
   isOpen: boolean;
@@ -30,7 +33,13 @@ export function ClassCodeDialog({ isOpen, onOpenChange, classCode }: ClassCodeDi
           <Button
             onClick={() => {
               navigator.clipboard.writeText(classCode);
-              alert("Class code copied to clipboard!");
+              toast.success("Class code copied to clipboard!", {
+                style: {
+                  background: "#1f2937",
+                  color: "#e5e7eb",
+                  border: "1px solid #2dd4bf",
+                },
+              });
             }}
             className="w-full sm:w-auto bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition-colors"
           >
