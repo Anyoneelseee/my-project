@@ -198,13 +198,7 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Footer */}
-      <footer className="py-6 px-10 bg-gray-900/70 backdrop-blur-lg text-center z-10">
-        <p className="text-gray-400 text-sm">
-          © 2025 CARMA. Powered by Anyone else. All rights reserved.
-        </p>
-      </footer>
-
+ 
       {/* Custom Styles */}
       <style jsx global>{`
         @keyframes fadeIn {

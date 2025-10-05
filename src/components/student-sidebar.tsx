@@ -1,7 +1,8 @@
+// File: src/components/StudentSidebar.tsx
 "use client";
 
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Command,
   SquareTerminal,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
-import { NavUser } from "@/components/nav-user";
+import { StudentNavUser } from "@/components/StudentNavUser";
 import {
   Sidebar,
   SidebarContent,
@@ -51,8 +52,10 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
           console.error("Failed to fetch user:", error?.message);
           return;
         }
+        console.log("Auth user:", authUser);
         const { data: userData, error: userError } = await supabase
           .rpc("get_user_profile", { user_id_input: authUser.id });
+        console.log("User profile data:", userData, "Error:", userError);
         if (userError || !userData || userData.length === 0) {
           console.warn("Failed to fetch user details:", userError?.message || "No user data found");
           setUser({
@@ -67,7 +70,7 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
           name: userProfile.first_name && userProfile.last_name
             ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
             : authUser.email?.split("@")[0] || "Student",
-          email: userProfile.email || "student@example.com",
+          email: userProfile.email || authUser.email || "student@example.com",
           avatar: userProfile.avatar_url || "",
         });
       } catch (err) {
@@ -78,8 +81,10 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
     fetchUser();
   }, []);
 
+  const memoizedUser = useMemo(() => user, [user.email, user.name, user.avatar]);
+
   const data = {
-    user,
+    user: memoizedUser,
     teams: [
       {
         name: "Carma",
@@ -121,9 +126,9 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
     >
       <SidebarHeader className="bg-transparent">
         <Avatar className="h-12 w-12 rounded-xl bg-slate-700 ring-2 ring-teal-400/50">
-          <AvatarImage src={user.avatar} alt={user.name} />
+          <AvatarImage src={memoizedUser.avatar} alt={memoizedUser.name} />
           <AvatarFallback className="rounded-xl text-slate-200 text-2xl font-semibold">
-            {user.name.charAt(0).toUpperCase()}
+            {memoizedUser.name.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
       </SidebarHeader>
@@ -131,7 +136,7 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter className="bg-transparent">
-        <NavUser user={data.user} />
+        <StudentNavUser key={memoizedUser.email} user={memoizedUser} />
       </SidebarFooter>
       <SidebarRail className="bg-transparent hover:bg-teal-500/20" />
     </Sidebar>
