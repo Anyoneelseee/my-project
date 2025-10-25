@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Upload, FileText, Image as ImageIcon, File, CheckCircle } from "lucide-react";
+import { Upload, FileText, Image as ImageIcon, File, CheckCircle, Trash2 } from "lucide-react";
 
 interface Activity {
   id: string;
@@ -46,6 +46,7 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
   const [uploadError, setUploadError] = useState<{ [key: string]: string | null }>({});
   const [uploadSuccess, setUploadSuccess] = useState<{ [key: string]: boolean }>({});
   const [section, setSection] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: File[] }>({});
 
   useEffect(() => {
     console.log("ActivitiesList received activities:", activities);
@@ -183,36 +184,40 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
   };
 
   const getStatus = (start_time: string | null, deadline: string | null, activityId: string): { text: string; color: string } => {
-  const now = new Date();
-  const startDate = start_time ? new Date(start_time) : null;
-  const deadlineDate = deadline ? new Date(deadline) : null;
+    const now = new Date();
+    const startDate = start_time ? new Date(start_time) : null;
+    const deadlineDate = deadline ? new Date(deadline) : null;
 
-  if (hasSubmission[activityId]) {
-    return { text: "Submitted", color: "bg-green-500" };
-  }
+    if (hasSubmission[activityId]) {
+      return { text: "Submitted", color: "bg-green-500" };
+    }
 
-  if (!start_time && !deadline) {
-    return { text: "No Dates Set", color: "bg-gray-600" };
-  }
-  if (startDate && startDate.getTime() > now.getTime()) {
-    return { text: "Not Started", color: "bg-blue-500" };
-  }
-  if (deadlineDate && deadlineDate.getTime() < now.getTime()) {
-    return { text: "Overdue", color: "bg-red-500" };
-  }
-  if (deadlineDate && deadlineDate.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
-    return { text: "Due Soon", color: "bg-yellow-500" };
-  }
-  if (startDate && startDate.getTime() <= now.getTime()) {
-    return { text: "In Progress", color: "bg-teal-500" };
-  }
-  return { text: "Upcoming", color: "bg-teal-500" };
-};
+    if (!start_time && !deadline) {
+      return { text: "No Dates Set", color: "bg-gray-600" };
+    }
+    if (startDate && startDate.getTime() > now.getTime()) {
+      return { text: "Not Started", color: "bg-blue-500" };
+    }
+    if (deadlineDate && deadlineDate.getTime() < now.getTime()) {
+      return { text: "Overdue", color: "bg-red-500" };
+    }
+    if (deadlineDate && deadlineDate.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
+      return { text: "Due Soon", color: "bg-yellow-500" };
+    }
+    if (startDate && startDate.getTime() <= now.getTime()) {
+      return { text: "In Progress", color: "bg-teal-500" };
+    }
+    return { text: "Upcoming", color: "bg-teal-500" };
+  };
 
   const handleUploadClick = (activityId: string) => {
+    if (hasSubmission[activityId]) {
+      return; // Prevent opening dialog if submission exists
+    }
     setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: true }));
     setUploadError((prev) => ({ ...prev, [activityId]: null }));
     setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
+    setSelectedFiles((prev) => ({ ...prev, [activityId]: [] }));
   };
 
   const handleViewSubmission = async (activityId: string) => {
@@ -263,126 +268,169 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
     }
   };
 
-  const handleSubmitActivity = async (activityId: string, file: File) => {
-    try {
-      // Refresh session to ensure a valid token
-      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-      console.log("Refreshed session:", session ? "Valid" : "Invalid", "Session Error:", sessionError?.message);
-      if (sessionError || !session || !session.user) {
-        throw new Error("No valid session available. Please log in again.");
-      }
-
-      if (!section) {
-        throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
-      }
-
-      if (!classId) {
-        throw new Error("Class ID is missing");
-      }
-
-      if (!activityId) {
-        throw new Error("Activity ID is missing");
-      }
-
+  const handleFileSelect = (activityId: string, files: FileList | null) => {
+    if (!files) return;
+    const validFiles = Array.from(files).filter((file) => {
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      if (!fileExtension || !['py', 'c', 'cpp', 'java'].includes(fileExtension)) {
-        throw new Error("Unsupported file type. Please upload .py, .c, .cpp, or .java files.");
-      }
-
-      const fileContent = await file.text();
-      if (!fileContent.trim()) {
-        throw new Error("File is empty.");
-      }
-
-      // Check for duplicate file_name
-      const { data: existingSubmission, error: existingError } = await supabase
-        .from("submissions")
-        .select("id")
-        .eq("class_id", classId)
-        .eq("activity_id", activityId)
-        .eq("student_id", session.user.id)
-        .eq("file_name", file.name);
-      if (existingError) {
-        console.error("Error checking existing file name:", existingError.message);
-        throw new Error("Failed to check for duplicate file names.");
-      }
-      if (existingSubmission && existingSubmission.length > 0) {
-        throw new Error("A file with this name has already been submitted for this activity.");
-      }
-
-      const timestamp = Date.now();
-      const safeFileName = `${file.name.replace(/[^a-zA-Z0-9.-]/g, "_").replace(/\.+/g, ".")}-${timestamp}.${fileExtension}`;
-      const requestBody = {
-        code: fileContent,
-        classId,
-        activityId,
-        language: fileExtension,
-        fileName: safeFileName,
-        section,
-        studentId: session.user.id,
-        accessToken: session.access_token,
-        refreshToken: session.refresh_token || '',
-      };
-
-      console.log("Submitting to /api/studentsubmit_code with body:", requestBody);
-      console.log("Authorization header:", `Bearer ${session.access_token}`);
-
-      const response = await fetch("/api/studentsubmit_code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-      console.log("API Response:", { status: response.status, statusText: response.statusText, data });
-      if (!response.ok) {
-        throw new Error(data.error || `Failed to submit activity: ${response.statusText}`);
-      }
-
-      setUploadSuccess((prev) => ({ ...prev, [activityId]: true }));
-      setHasSubmission((prev) => ({ ...prev, [activityId]: true }));
-      // Refresh submissions after upload
-      const { data: submissionData } = await supabase
-        .from("submissions")
-        .select("id, file_name, file_path, is_viewed, ai_percentage")
-        .eq("class_id", classId)
-        .eq("activity_id", activityId)
-        .eq("student_id", session.user.id)
-        .order("submitted_at", { ascending: false });
-      if (submissionData) {
-        setSubmissionFileName((prev) => ({
-          ...prev,
-          [activityId]: submissionData.map((sub: Submission) => sub.file_name),
-        }));
-        setSubmissionIsViewed((prev) => ({
-          ...prev,
-          [activityId]: submissionData.map((sub: Submission) => sub.is_viewed || false),
-        }));
-        setSubmissionAiPercentage((prev) => ({
-          ...prev,
-          [activityId]: submissionData.map((sub: Submission) => sub.ai_percentage || null),
-        }));
-      }
-      setTimeout(() => {
-        setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: false }));
-        setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
-      }, 2000);
-    } catch (error) {
-      console.error("Submission error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to submit activity";
-      setUploadError((prev) => ({ ...prev, [activityId]: errorMessage }));
-    }
+      return fileExtension && ['py', 'c', 'cpp', 'java'].includes(fileExtension);
+    });
+    setSelectedFiles((prev) => ({
+      ...prev,
+      [activityId]: [...(prev[activityId] || []), ...validFiles],
+    }));
+    setUploadError((prev) => ({ ...prev, [activityId]: validFiles.length === files.length ? null : "Some files were not supported (.py, .c, .cpp, .java only)." }));
   };
 
-// Sort activities by created_at in descending order (newest first)
-const sortedActivities = [...activities].sort((a, b) => {
-  const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-  const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-  return dateB - dateA;
-});
+  const handleRemoveFile = (activityId: string, index: number) => {
+    setSelectedFiles((prev) => ({
+      ...prev,
+      [activityId]: prev[activityId].filter((_, i) => i !== index),
+    }));
+  };
+
+ const handleSubmitActivity = async (activityId: string) => {
+  try {
+    // Refresh session to ensure a valid token
+    const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+    console.log("Refreshed session:", session ? "Valid" : "Invalid", "Session Error:", sessionError?.message);
+    if (sessionError || !session || !session.user) {
+      throw new Error("No valid session available. Please log in again.");
+    }
+
+    if (!section) {
+      throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
+    }
+
+    if (!classId) {
+      throw new Error("Class ID is missing");
+    }
+
+    if (!activityId) {
+      throw new Error("Activity ID is missing");
+    }
+
+    const files = selectedFiles[activityId] || [];
+    if (files.length === 0) {
+      throw new Error("No files selected for upload.");
+    }
+
+    // Check for duplicate file names among selected files
+    const fileNames = files.map((file) => file.name);
+    const uniqueFileNames = new Set(fileNames);
+    if (uniqueFileNames.size !== fileNames.length) {
+      throw new Error("Duplicate file names detected. Please select files with unique names.");
+    }
+
+    // Check for existing submissions with the same file names
+    const { data: existingSubmissions, error: existingError } = await supabase
+      .from("submissions")
+      .select("file_name")
+      .eq("class_id", classId)
+      .eq("activity_id", activityId)
+      .eq("student_id", session.user.id);
+    if (existingError) {
+      console.error("Error checking existing file names:", existingError.message);
+      throw new Error("Failed to check for duplicate file names.");
+    }
+
+    const existingFileNames = existingSubmissions?.map((sub) => sub.file_name) || [];
+    const duplicates = fileNames.filter((name) => existingFileNames.includes(name));
+    if (duplicates.length > 0) {
+      throw new Error(`Files already submitted: ${duplicates.join(", ")}.`);
+    }
+
+    // Prepare files array for the API
+    const filesData = await Promise.all(
+      files.map(async (file) => {
+        const fileExtension = file.name.split('.').pop()?.toLowerCase();
+        const fileContent = await file.text();
+        return {
+          code: fileContent,
+          fileName: file.name,
+          language: fileExtension,
+        };
+      })
+    );
+
+    const requestBody = {
+      files: filesData,
+      classId,
+      activityId,
+      section,
+      studentId: session.user.id,
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token || '',
+    };
+
+    console.log("Submitting to /api/studentsubmit_code with body:", {
+      ...requestBody,
+      files: requestBody.files.map((f) => ({
+        fileName: f.fileName,
+        language: f.language,
+        codeLength: f.code.length,
+      })),
+      accessToken: requestBody.accessToken.substring(0, 10) + "...",
+      refreshToken: requestBody.refreshToken.substring(0, 10) + "...",
+    });
+
+    const response = await fetch("/api/studentsubmit_code", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const data = await response.json();
+    console.log("API Response:", { status: response.status, statusText: response.statusText, data });
+    if (!response.ok) {
+      throw new Error(data.error || `Failed to submit files: ${response.statusText}`);
+    }
+
+    setUploadSuccess((prev) => ({ ...prev, [activityId]: true }));
+    setHasSubmission((prev) => ({ ...prev, [activityId]: true }));
+    setSelectedFiles((prev) => ({ ...prev, [activityId]: [] }));
+
+    // Refresh submissions after upload
+    const { data: submissionData } = await supabase
+      .from("submissions")
+      .select("id, file_name, file_path, is_viewed, ai_percentage")
+      .eq("class_id", classId)
+      .eq("activity_id", activityId)
+      .eq("student_id", session.user.id)
+      .order("submitted_at", { ascending: false });
+    if (submissionData) {
+      setSubmissionFileName((prev) => ({
+        ...prev,
+        [activityId]: submissionData.map((sub: Submission) => sub.file_name),
+      }));
+      setSubmissionIsViewed((prev) => ({
+        ...prev,
+        [activityId]: submissionData.map((sub: Submission) => sub.is_viewed || false),
+      }));
+      setSubmissionAiPercentage((prev) => ({
+        ...prev,
+        [activityId]: submissionData.map((sub: Submission) => sub.ai_percentage || null),
+      }));
+    }
+    setTimeout(() => {
+      setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: false }));
+      setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
+    }, 2000);
+  } catch (error) {
+    console.error("Submission error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to submit activity";
+    setUploadError((prev) => ({ ...prev, [activityId]: errorMessage }));
+  }
+};
+
+  // Sort activities by created_at in descending order (newest first)
+  const sortedActivities = [...activities].sort((a, b) => {
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return dateB - dateA;
+  });
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
@@ -403,9 +451,9 @@ const sortedActivities = [...activities].sort((a, b) => {
                 <CardTitle className="text-xl font-extrabold text-teal-400 truncate">
                   {activity.title || "Untitled Activity"}
                 </CardTitle>
-<p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${getStatus(activity.start_time, activity.deadline, activity.id).color} w-fit mt-1`}>
-  {getStatus(activity.start_time, activity.deadline, activity.id).text}
-</p>
+                <p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${getStatus(activity.start_time, activity.deadline, activity.id).color} w-fit mt-1`}>
+                  {getStatus(activity.start_time, activity.deadline, activity.id).text}
+                </p>
               </CardHeader>
               <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
                 <div className="flex gap-2 flex-wrap">
@@ -468,7 +516,8 @@ const sortedActivities = [...activities].sort((a, b) => {
                       e.stopPropagation();
                       handleUploadClick(activity.id);
                     }}
-                    aria-label={`Upload file for ${activity.title || "Untitled Activity"}`}
+                    disabled={hasSubmission[activity.id]}
+                    aria-label={hasSubmission[activity.id] ? "Submissions already made" : `Upload file for ${activity.title || "Untitled Activity"}`}
                   >
                     <Upload className="w-4 h-4 mr-1" />
                     Upload File
@@ -613,24 +662,43 @@ const sortedActivities = [...activities].sort((a, b) => {
                 <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-extrabold text-teal-400">
-                      Upload File for {activity.title || "Untitled Activity"}
+                      Upload Files for {activity.title || "Untitled Activity"}
                     </DialogTitle>
                     <DialogDescription className="text-teal-300 text-sm">
-                      Select a file to submit for this activity (.py, .c, .cpp, .java).
+                      Select one or more .py, .c, .cpp, or .java files to submit.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
                     <Input
                       type="file"
                       accept=".py,.c,.cpp,.java"
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleSubmitActivity(activity.id, e.target.files[0]);
-                        }
-                      }}
+                      multiple
+                      onChange={(e: { target: { files: FileList | null; }; }) => handleFileSelect(activity.id, e.target.files)}
                       className="text-teal-300 border-teal-500/30 focus:ring-2 focus:ring-teal-400"
-                      aria-label="Upload file input"
+                      aria-label="Upload multiple files input"
+                      disabled={hasSubmission[activity.id]}
                     />
+                    {selectedFiles[activity.id]?.length > 0 && (
+                      <div className="text-teal-200 text-sm max-h-[20vh] overflow-y-auto">
+                        <p className="font-semibold mb-2">Selected Files:</p>
+                        <ul className="space-y-2">
+                          {selectedFiles[activity.id].map((file, index) => (
+                            <li key={index} className="flex items-center justify-between">
+                              <span>{file.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-400 hover:text-red-300"
+                                onClick={() => handleRemoveFile(activity.id, index)}
+                                aria-label={`Remove file ${file.name}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     {uploadError[activity.id] && (
                       <p className="text-red-400 text-sm" aria-live="polite">
                         {uploadError[activity.id]}
@@ -638,16 +706,23 @@ const sortedActivities = [...activities].sort((a, b) => {
                     )}
                     {uploadSuccess[activity.id] && (
                       <p className="text-teal-400 text-sm" aria-live="polite">
-                        File uploaded successfully!
+                        Files uploaded successfully!
                       </p>
                     )}
                   </div>
-                  <DialogFooter className="mt-4">
+                  <DialogFooter className="mt-4 flex flex-row gap-2">
                     <Button
                       onClick={() => setIsUploadDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
+                      className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg"
                     >
                       Cancel
+                    </Button>
+                    <Button
+                      onClick={() => handleSubmitActivity(activity.id)}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
+                      disabled={hasSubmission[activity.id] || !selectedFiles[activity.id]?.length}
+                    >
+                      Submit
                     </Button>
                   </DialogFooter>
                 </DialogContent>

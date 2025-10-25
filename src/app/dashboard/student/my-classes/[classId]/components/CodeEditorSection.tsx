@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, Fragment } from "react";
+import { useState, useRef, useEffect, Fragment, SetStateAction } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import AceEditor from "react-ace";
 import { supabase } from "@/lib/supabase";
 import "ace-builds/src-noconflict/mode-python";
@@ -39,6 +40,8 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
   const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false);
   const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
   const [showUnsupportedLanguageDialog, setShowUnsupportedLanguageDialog] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [fileNameInput, setFileNameInput] = useState("");
   const [isEnrolled, setIsEnrolled] = useState<boolean>(false);
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -294,11 +297,18 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
 
     const extension = language === "python" ? "py" : language === "cpp" ? "cpp" : language === "c" ? "c" : "java";
     const defaultFileName = `code-${classId}-${Date.now()}.${extension}`;
-    const userFileName = prompt("Enter a file name for your code:", defaultFileName);
+    setFileNameInput(defaultFileName);
+    setShowSaveDialog(true);
+  };
 
-    if (userFileName === null) return;
+  const confirmSaveCode = () => {
+    if (!fileNameInput.trim()) {
+      setError((prev) => [...prev, "File name cannot be empty"]);
+      return;
+    }
 
-    const finalFileName = userFileName.endsWith(`.${extension}`) ? userFileName : `${userFileName}.${extension}`;
+    const extension = language === "python" ? "py" : language === "cpp" ? "cpp" : language === "c" ? "c" : "java";
+    const finalFileName = fileNameInput.endsWith(`.${extension}`) ? fileNameInput : `${fileNameInput}.${extension}`;
     const blob = new Blob([code], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -308,8 +318,9 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    setOutput((prev) => [...prev, `Code saved locally as ${finalFileName}`]);
     logActivity("Saved Code");
+    setShowSaveDialog(false);
+    setFileNameInput("");
   };
 
   const handleCodeChange = (newCode: string) => {
@@ -486,6 +497,70 @@ export default function CodeEditorSection({ classId }: CodeEditorSectionProps) {
                       onClick={() => setShowUnsupportedLanguageDialog(false)}
                     >
                       OK
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      <Transition appear show={showSaveDialog} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setShowSaveDialog(false)}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-50" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-extrabold text-teal-400">
+                    Save Code
+                  </Dialog.Title>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-200">Enter a file name for your code:</p>
+                    <Input
+                      value={fileNameInput}
+                      onChange={(e: { target: { value: SetStateAction<string>; }; }) => setFileNameInput(e.target.value)}
+                      className="mt-2 bg-gray-700/50 border-gray-600 text-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      placeholder="Enter file name"
+                    />
+                  </div>
+                  <div className="mt-4 flex gap-4">
+                    <button
+                      type="button"
+                      className="w-1/2 inline-flex justify-center rounded-lg bg-gray-700/50 hover:bg-gray-600 px-4 py-2 text-sm font-medium text-white focus:outline-none transition-all duration-200"
+                      onClick={() => {
+                        setShowSaveDialog(false);
+                        setFileNameInput("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="w-1/2 inline-flex justify-center rounded-lg bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 px-4 py-2 text-sm font-medium text-white focus:outline-none transition-all duration-200"
+                      onClick={confirmSaveCode}
+                    >
+                      Save
                     </button>
                   </div>
                 </Dialog.Panel>

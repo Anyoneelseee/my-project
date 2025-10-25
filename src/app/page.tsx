@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { motion, useInView, Variants } from "framer-motion";
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect";
-import { Loader2 } from "lucide-react";
+import { Loader2, Code, Shield, Clock } from "lucide-react";
 
-// Define Particle type
 interface Particle {
   draw(): unknown;
   update(): unknown;
@@ -31,12 +31,17 @@ const ParticleBackground = () => {
     const numberOfParticles = 100;
     let mouseX = 0;
     let mouseY = 0;
+    let scrollY = 0;
 
     const handleMouseMove = (e: MouseEvent) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
     };
+    const handleScroll = () => {
+      scrollY = window.scrollY;
+    };
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("scroll", handleScroll);
 
     class ParticleClass implements Particle {
       x: number;
@@ -64,8 +69,10 @@ const ParticleBackground = () => {
           this.y += (dy / distance) * force * 3;
         }
 
-        this.x += this.speedX;
-        this.y += this.speedY;
+        const scrollFactor = Math.min(scrollY / 1000, 2);
+        this.x += this.speedX * (1 + scrollFactor);
+        this.y += this.speedY * (1 + scrollFactor);
+
         if (this.x > canvas.width) this.x = 0;
         if (this.x < 0) this.x = canvas.width;
         if (this.y > canvas.height) this.y = 0;
@@ -108,6 +115,7 @@ const ParticleBackground = () => {
     return () => {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("scroll", handleScroll);
     };
   }, []);
 
@@ -116,28 +124,37 @@ const ParticleBackground = () => {
 
 export default function HomePage() {
   const [loading, setLoading] = useState(false);
-  const heroRef = useRef<HTMLElement>(null); // Ref for the hero section
+  const heroRef = useRef<HTMLElement>(null);
+  const featuresRef = useRef<HTMLElement>(null);
+  const howItWorksRef = useRef<HTMLElement>(null);
+  const footerRef = useRef<HTMLElement>(null);
+
+  const isHeroInView = useInView(heroRef, { margin: "-100px", once: false });
+  const isFeaturesInView = useInView(featuresRef, { margin: "-100px", once: false });
+  const isHowItWorksInView = useInView(howItWorksRef, { margin: "-100px", once: false });
+  const isFooterInView = useInView(footerRef, { margin: "-100px", once: false });
+
+  const fadeInVariants: Variants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 1.5, ease: "easeOut" as const } },
+  };
 
   const handleClick = () => {
     setLoading(true);
   };
 
-  // Force the text color of the hero section after rendering
   useEffect(() => {
     const fixTextColor = () => {
       if (heroRef.current) {
-        // Select all text-containing elements within the h2
-        const textElements = heroRef.current.querySelectorAll('h2, h2 *');
+        const textElements = heroRef.current.querySelectorAll('h2, h2 *, p, p *');
         textElements.forEach((element) => {
-          (element as HTMLElement).style.color = '#D1D5DB'; // Force text-gray-300
+          (element as HTMLElement).style.color = '#D1D5DB';
         });
       }
     };
 
-    // Run immediately after mount
     fixTextColor();
 
-    // Set up a mutation observer to handle dynamic changes (e.g., TextGenerateEffect rendering)
     const observer = new MutationObserver(() => {
       fixTextColor();
     });
@@ -146,27 +163,26 @@ export default function HomePage() {
       observer.observe(heroRef.current, { childList: true, subtree: true });
     }
 
-    // Cleanup observer on unmount
     return () => observer.disconnect();
   }, []);
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-blue-950 via-gray-900 to-blue-950 text-white">
-      {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Website Name Above Hero Section */}
       <div className="text-center pt-10 z-10 relative">
-        <h1 className="text-6xl md:text-8xl font-extrabold text-teal-400 tracking-wide">
+        <motion.h1
+          initial="hidden"
+          animate={isHeroInView ? "visible" : "hidden"}
+          variants={fadeInVariants}
+          className="text-6xl md:text-8xl font-extrabold text-teal-400 tracking-wide"
+        >
           CARMA
-        </h1>
+        </motion.h1>
       </div>
 
-      {/* Hero Section */}
       <header ref={heroRef} className="py-16 px-10 relative z-10 flex flex-col items-center">
-        {/* Overlay for Better Text Visibility */}
-        <div className="absolute inset-0  from-blue-950/40 z-[-1]"></div>
-
+        <div className="absolute inset-0 from-blue-950/40 z-[-1]"></div>
         <h2 className="text-3xl md:text-5xl font-extrabold text-gray-300 animate-fade-in leading-tight max-w-4xl text-center">
           <TextGenerateEffect
             duration={2}
@@ -175,12 +191,20 @@ export default function HomePage() {
             className="text-3xl md:text-5xl font-extrabold text-gray-300 !text-gray-300"
           />
         </h2>
-
-        <p className="text-gray-300 text-lg md:text-xl mt-6 max-w-2xl leading-relaxed text-center">
+        <motion.p
+          initial="hidden"
+          animate={isHeroInView ? "visible" : "hidden"}
+          variants={fadeInVariants}
+          className="text-gray-300 text-lg md:text-xl mt-6 max-w-2xl leading-relaxed text-center"
+        >
           Ensuring integrity in programming education with advanced AI-driven tools.
-        </p>
-
-        <div className="flex justify-center mt-10">
+        </motion.p>
+        <motion.div
+          initial="hidden"
+          animate={isHeroInView ? "visible" : "hidden"}
+          variants={fadeInVariants}
+          className="flex justify-center mt-10"
+        >
           <Link href="/login">
             <button
               onClick={handleClick}
@@ -195,11 +219,136 @@ export default function HomePage() {
               )}
             </button>
           </Link>
-        </div>
+        </motion.div>
       </header>
 
- 
-      {/* Custom Styles */}
+      <section ref={featuresRef} className="py-16 px-10 relative z-10">
+        <div className="max-w-6xl mx-auto">
+          <motion.h3
+            initial="hidden"
+            animate={isFeaturesInView ? "visible" : "hidden"}
+            variants={fadeInVariants}
+            className="text-4xl font-extrabold text-teal-400 text-center mb-12"
+          >
+            Why Choose CARMA?
+          </motion.h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <motion.div
+              initial="hidden"
+              animate={isFeaturesInView ? "visible" : "hidden"}
+              variants={fadeInVariants}
+              className="bg-gray-800/50 p-6 rounded-xl shadow-lg border border-teal-500/20 hover:bg-gray-700/50 transition-all duration-300"
+            >
+              <Code className="h-12 w-12 text-teal-400 mb-4 mx-auto" />
+              <h4 className="text-xl font-extrabold text-gray-300 text-center">Code Similarity Detection</h4>
+              <p className="text-gray-300 mt-2 text-center">
+                Instantly identify similarities between student submissions to ensure originality and prevent plagiarism.
+              </p>
+            </motion.div>
+            <motion.div
+              initial="hidden"
+              animate={isFeaturesInView ? "visible" : "hidden"}
+              variants={fadeInVariants}
+              transition={{ delay: 0.2 }}
+              className="bg-gray-800/50 p-6 rounded-xl shadow-lg border border-teal-500/20 hover:bg-gray-700/50 transition-all duration-300"
+            >
+              <Shield className="h-12 w-12 text-teal-400 mb-4 mx-auto" />
+              <h4 className="text-xl font-extrabold text-gray-300 text-center">AI-Generated Code Detection</h4>
+              <p className="text-gray-300 mt-2 text-center">
+                Detect AI-generated code with advanced machine learning to uphold academic integrity.
+              </p>
+            </motion.div>
+            <motion.div
+              initial="hidden"
+              animate={isFeaturesInView ? "visible" : "hidden"}
+              variants={fadeInVariants}
+              transition={{ delay: 0.4 }}
+              className="bg-gray-800/50 p-6 rounded-xl shadow-lg border border-teal-500/20 hover:bg-gray-700/50 transition-all duration-300"
+            >
+              <Clock className="h-12 w-12 text-teal-400 mb-4 mx-auto" />
+              <h4 className="text-xl font-extrabold text-gray-300 text-center">Real-Time Monitoring</h4>
+              <p className="text-gray-300 mt-2 text-center">
+                Track student coding activity in real-time to provide insights and support fair evaluation.
+              </p>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      <section ref={howItWorksRef} className="py-16 px-10 relative z-10">
+        <div className="max-w-6xl mx-auto">
+          <motion.h3
+            initial="hidden"
+            animate={isHowItWorksInView ? "visible" : "hidden"}
+            variants={fadeInVariants}
+            className="text-4xl font-extrabold text-teal-400 text-center mb-12"
+          >
+            How CARMA Works
+          </motion.h3>
+          <div className="space-y-8">
+            {[
+              {
+                step: 1,
+                title: "Submit Your Code",
+                description: "Students or professors upload code via our intuitive interface.",
+              },
+              {
+                step: 2,
+                title: "Analyze with AI",
+                description: "Our AI analyzes code for similarity and AI-generated content.",
+              },
+              {
+                step: 3,
+                title: "Get Results",
+                description: "Receive detailed reports on code originality and activity insights.",
+              },
+            ].map((item, index) => (
+              <motion.div
+                key={index}
+                initial="hidden"
+                animate={isHowItWorksInView ? "visible" : "hidden"}
+                variants={fadeInVariants}
+                transition={{ delay: index * 0.3 }}
+                className="flex items-center space-x-4 bg-gray-800/50 p-6 rounded-xl border border-teal-500/20 hover:bg-gray-700/50 transition-all duration-300"
+              >
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-teal-500 text-white flex items-center justify-center text-xl font-extrabold">
+                  {item.step}
+                </div>
+                <div>
+                  <h4 className="text-xl font-extrabold text-gray-300">{item.title}</h4>
+                  <p className="text-gray-300 mt-1">{item.description}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <footer ref={footerRef} className="py-12 px-10 bg-gray-900/80 relative z-10">
+        <motion.div
+          initial="hidden"
+          animate={isFooterInView ? "visible" : "hidden"}
+          variants={fadeInVariants}
+          className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center"
+        >
+          <div className="mb-6 md:mb-0">
+            <h3 className="text-2xl font-extrabold text-teal-400">CARMA</h3>
+            <p className="text-gray-300 text-sm mt-2">
+              Empowering academic integrity through AI-driven code analysis.
+            </p>
+          </div>
+       
+        </motion.div>
+        <motion.div
+          initial="hidden"
+          animate={isFooterInView ? "visible" : "hidden"}
+          variants={fadeInVariants}
+          className="text-center text-gray-400 text-sm mt-6"
+        >
+          &copy; {new Date().getFullYear()} CARMA. All rights reserved.
+        </motion.div>
+      </footer>
+
       <style jsx global>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(20px); }
@@ -216,18 +365,35 @@ export default function HomePage() {
         .animate-glow {
           animation: glow 2s infinite;
         }
-        /* Fallback CSS for hero section text */
         header h2,
         header p,
         header h2 > *,
-        header p > * {
-          color: #D1D5DB !important; /* Tailwind's text-gray-300 */
+        header p > *,
+        section h3,
+        section h4,
+        section p,
+        footer h3,
+        footer p,
+        footer a {
+          color: #D1D5DB !important;
         }
         header:hover h2,
         header:hover p,
         header:hover h2 > *,
-        header:hover p > * {
-          color: #D1D5DB !important; /* Prevent hover changes */
+        header:hover p > *,
+        section:hover h3,
+        section:hover h4,
+        section:hover p,
+        footer:hover h3,
+        footer:hover p,
+        footer:hover a {
+          color: #D1D5DB !important;
+        }
+        footer a:hover {
+          color: #2DD4BF !important;
+        }
+        button:disabled {
+          cursor: not-allowed;
         }
       `}</style>
     </div>

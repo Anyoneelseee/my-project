@@ -1,7 +1,5 @@
 import { supabase } from "@/lib/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
-import { toast } from "sonner";
-
 interface Notification {
   id: string;
   student_id: string;
@@ -21,13 +19,6 @@ export const subscriptionManager = {
   async initialize(userId: string) {
     if (!userId) {
       console.error("No userId provided for subscription initialization");
-      toast.error("Failed to initialize notifications: No user ID provided.", {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
       return;
     }
 
@@ -111,13 +102,7 @@ export const subscriptionManager = {
           this.syncNotifications(userId);
         } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
           console.error("Subscription error or closed:", status, err ? err.message : "");
-          toast.error(`Failed to connect to notifications: ${err?.message || status}. Retrying...`, {
-            style: {
-              background: "#1f2937",
-              color: "#e5e7eb",
-              border: "1px solid #2dd4bf",
-            },
-          });
+
           setTimeout(() => {
             if (this.currentUserId) {
               this.initialize(this.currentUserId);
@@ -161,13 +146,6 @@ export const subscriptionManager = {
   async syncNotifications(userId: string) {
     if (!userId) {
       console.error("No userId provided for syncNotifications");
-      toast.error("Failed to sync notifications: No user ID provided.", {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
       return;
     }
     const { data, error } = await supabase
@@ -178,13 +156,6 @@ export const subscriptionManager = {
 
     if (error) {
       console.error("Error syncing notifications:", error.message, error.details, error.hint);
-      toast.error(`Failed to sync notifications: ${error.message}`, {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
       return;
     }
 
