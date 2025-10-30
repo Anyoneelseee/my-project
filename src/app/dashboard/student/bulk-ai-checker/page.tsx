@@ -53,7 +53,7 @@ interface FileWithResult {
   aiPercentage: number | null;
   error: string | null;
   similarity: SimilarityResult | SimilarityError | null;
-  cached?: boolean; // ← NEW: for cache hit badge
+  cached?: boolean;
 }
 
 export default function BulkAICheckerPage() {
@@ -185,16 +185,22 @@ export default function BulkAICheckerPage() {
     setIsProcessing(true);
     const updatedFiles = [...files];
 
-    // ──────── 1. BULK AI CHECK (via internal API with cache) ────────
+    // ──────── 1. BULK AI CHECK (with 25s timeout) ────────
     const validFiles = updatedFiles.filter((f) => !f.error && f.code.trim());
     if (validFiles.length > 0) {
       try {
         const codes = validFiles.map((f) => f.code);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s
+
         const response = await fetch("/api/bulk-ai-detector", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ codes }),
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const err = await response.text();
@@ -220,21 +226,32 @@ export default function BulkAICheckerPage() {
             cached: r.cached,
           };
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error("Bulk AI check error:", err);
+        const errorMsg = err instanceof Error ? err.message : "Unknown error";
+         const isTimeout =
+    (err instanceof Error && err.name === "AbortError") ||
+    errorMsg.toLowerCase().includes("timeout");
+
         for (let i = 0; i < updatedFiles.length; i++) {
           if (!updatedFiles[i].error && updatedFiles[i].code.trim()) {
             updatedFiles[i] = {
               ...updatedFiles[i],
               aiPercentage: null,
-              error: "AI check failed",
+              error: isTimeout
+                ? "AI check timed out. Try fewer files or later."
+                : "AI check failed. Please try again.",
             };
           }
+        }
+
+        if (isTimeout) {
+          alert("AI check timed out. Try fewer files or check back later.");
         }
       }
     }
 
-    // ──────── 2. SIMILARITY CHECK (direct to 3rd party) ────────
+    // ──────── 2. SIMILARITY CHECK (direct) ────────
     const validAfterAI = updatedFiles.filter((f) => !f.error && f.code.trim());
     if (validAfterAI.length > 1) {
       const codes = validAfterAI.map((f) => f.code);
@@ -245,7 +262,7 @@ export default function BulkAICheckerPage() {
           body: JSON.stringify({ codes }),
         });
 
-        if (!response.ok) throw new Error(`Similarity detection failed: ${response.statusText}`);
+        if (!response.ok) throw new Error(`Similarity failed: ${response.statusText}`);
 
         const { similarities = {} } = await response.json();
 
@@ -371,7 +388,7 @@ export default function BulkAICheckerPage() {
                   Bulk AI Checker
                 </CardTitle>
                 <p className="text-sm text-teal-300">
-                  Upload up to 10 files to check AI-generated content and similarity for your own submissions.
+                  Upload up to 10 files to check AI-generated content and similarity.
                 </p>
               </CardHeader>
               <CardContent className="pt-4">
