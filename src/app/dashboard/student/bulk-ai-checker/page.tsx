@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
-import { StudentSidebar } from "@/components/student-sidebar"; // Updated import path
+import { StudentSidebar } from "@/components/student-sidebar";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -53,6 +53,7 @@ interface FileWithResult {
   aiPercentage: number | null;
   error: string | null;
   similarity: SimilarityResult | SimilarityError | null;
+  cached?: boolean; // ← NEW: for cache hit badge
 }
 
 export default function BulkAICheckerPage() {
@@ -176,63 +177,77 @@ export default function BulkAICheckerPage() {
   };
 
   const handleCheckAIAndSimilarity = async () => {
-    if (!process.env.NEXT_PUBLIC_AI_DETECTOR_URL || !process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
-      alert("AI or similarity detector URL is not configured.");
+    if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
+      alert("Similarity detector URL is not configured.");
       return;
     }
 
     setIsProcessing(true);
     const updatedFiles = [...files];
 
-    // Step 1: Check AI percentage for each file
-    for (let i = 0; i < updatedFiles.length; i++) {
-      const fileEntry = updatedFiles[i];
-      if (fileEntry.error) continue; // Skip files with errors
-
-      try {
-        const response = await fetch(process.env.NEXT_PUBLIC_AI_DETECTOR_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: fileEntry.code }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`AI detection failed for ${fileEntry.file.name}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        updatedFiles[i] = {
-          ...fileEntry,
-          aiPercentage: result.ai_percentage || 0,
-          error: null,
-        };
-      } catch {
-        updatedFiles[i] = {
-          ...fileEntry,
-          aiPercentage: null,
-          error: "Failed to check AI percentage.",
-        };
-      }
-      setFiles([...updatedFiles]); // Update state incrementally
-    }
-
-    // Step 2: Calculate similarity if enough valid files
+    // ──────── 1. BULK AI CHECK (via internal API with cache) ────────
     const validFiles = updatedFiles.filter((f) => !f.error && f.code.trim());
-    if (validFiles.length > 1) {
-      const codes = validFiles.map((f) => f.code);
+    if (validFiles.length > 0) {
       try {
-        const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL, {
+        const codes = validFiles.map((f) => f.code);
+        const response = await fetch("/api/bulk-ai-detector", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ codes }),
         });
 
         if (!response.ok) {
-          throw new Error(`Similarity detection failed: ${response.statusText}`);
+          const err = await response.text();
+          throw new Error(`Bulk AI check failed: ${err}`);
         }
 
-        const result = await response.json();
-        const similarities = result.similarities || {};
+        const results: {
+          ai_percentage: number | null;
+          error: string | null;
+          cached?: boolean;
+        }[] = await response.json();
+
+        let resultIdx = 0;
+        for (let i = 0; i < updatedFiles.length; i++) {
+          const f = updatedFiles[i];
+          if (f.error || !f.code.trim()) continue;
+
+          const r = results[resultIdx++];
+          updatedFiles[i] = {
+            ...f,
+            aiPercentage: r.ai_percentage ?? null,
+            error: r.error ?? null,
+            cached: r.cached,
+          };
+        }
+      } catch (err) {
+        console.error("Bulk AI check error:", err);
+        for (let i = 0; i < updatedFiles.length; i++) {
+          if (!updatedFiles[i].error && updatedFiles[i].code.trim()) {
+            updatedFiles[i] = {
+              ...updatedFiles[i],
+              aiPercentage: null,
+              error: "AI check failed",
+            };
+          }
+        }
+      }
+    }
+
+    // ──────── 2. SIMILARITY CHECK (direct to 3rd party) ────────
+    const validAfterAI = updatedFiles.filter((f) => !f.error && f.code.trim());
+    if (validAfterAI.length > 1) {
+      const codes = validAfterAI.map((f) => f.code);
+      try {
+        const response = await fetch(process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL!, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codes }),
+        });
+
+        if (!response.ok) throw new Error(`Similarity detection failed: ${response.statusText}`);
+
+        const { similarities = {} } = await response.json();
 
         updatedFiles.forEach((fileEntry, idx) => {
           if (!fileEntry.error && fileEntry.code.trim()) {
@@ -240,7 +255,7 @@ export default function BulkAICheckerPage() {
             updatedFiles.forEach((otherEntry, otherIdx) => {
               if (idx !== otherIdx && !otherEntry.error && otherEntry.code.trim()) {
                 const key = idx < otherIdx ? `${idx}-${otherIdx}` : `${otherIdx}-${idx}`;
-                fileSimilarities[otherEntry.file.name] = similarities[key] || 0;
+                fileSimilarities[otherEntry.file.name] = similarities[key] ?? 0;
               }
             });
             updatedFiles[idx] = { ...fileEntry, similarity: fileSimilarities };
@@ -249,22 +264,25 @@ export default function BulkAICheckerPage() {
       } catch {
         updatedFiles.forEach((fileEntry, idx) => {
           if (!fileEntry.error && fileEntry.code.trim()) {
-            updatedFiles[idx] = { ...fileEntry, similarity: { error: "Similarity check failed" } };
+            updatedFiles[idx] = {
+              ...fileEntry,
+              similarity: { error: "Similarity check failed" },
+            };
           }
         });
       }
-    } else {
+    } else if (validAfterAI.length > 0) {
       updatedFiles.forEach((fileEntry, idx) => {
         if (!fileEntry.error && fileEntry.code.trim()) {
           updatedFiles[idx] = {
             ...fileEntry,
-            similarity: { error: "Not enough valid files for similarity detection (minimum 2 required)" },
+            similarity: { error: "Need at least 2 valid files for similarity" },
           };
         }
       });
     }
 
-    setFiles([...updatedFiles]);
+    setFiles(updatedFiles);
     setIsProcessing(false);
   };
 
@@ -304,12 +322,16 @@ export default function BulkAICheckerPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        Loading...
+      </div>
+    );
   }
 
   return (
     <SidebarProvider>
-      <StudentSidebar classes={classes} /> {/* Correct import used */}
+      <StudentSidebar classes={classes} />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
           <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
@@ -334,11 +356,11 @@ export default function BulkAICheckerPage() {
         <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <style jsx global>{`
             .ai-generated-line {
-              background-color: rgba(255, 99, 71, 0.2); /* Light red for AI-generated */
+              background-color: rgba(255, 99, 71, 0.2);
               position: absolute;
             }
             .human-written-line {
-              background-color: rgba(50, 205, 50, 0.2); /* Light green for human-written */
+              background-color: rgba(50, 205, 50, 0.2);
               position: absolute;
             }
           `}</style>
@@ -348,11 +370,13 @@ export default function BulkAICheckerPage() {
                 <CardTitle className="text-2xl font-semibold text-teal-400">
                   Bulk AI Checker
                 </CardTitle>
-                <p className="text-sm text-teal-300">Upload up to 10 files to check AI-generated content and similarity for your own submissions.</p>
+                <p className="text-sm text-teal-300">
+                  Upload up to 10 files to check AI-generated content and similarity for your own submissions.
+                </p>
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="flex flex-col gap-4">
-                  {/* File Upload Section */}
+                  {/* File Upload */}
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <Label className="text-sm font-medium text-teal-300">Upload Files (Max 10)</Label>
                     <Input
@@ -372,10 +396,24 @@ export default function BulkAICheckerPage() {
                     </Button>
                   </div>
 
-                  {/* Results Section */}
+                  {/* Results */}
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">Results</h3>
-                    {files.length === 0 ? (
+
+                    {/* Loading Skeleton */}
+                    {isProcessing ? (
+                      <div className="space-y-4">
+                        {[...Array(Math.min(files.length, 3))].map((_, i) => (
+                          <div
+                            key={i}
+                            className="bg-gray-800/50 rounded-lg p-4 border border-teal-500/20 animate-pulse"
+                          >
+                            <div className="h-4 bg-gray-700 rounded w-48 mb-2"></div>
+                            <div className="h-32 bg-gray-700 rounded"></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : files.length === 0 ? (
                       <p className="text-teal-300 text-center">No files uploaded yet.</p>
                     ) : (
                       <div className="space-y-4">
@@ -394,14 +432,26 @@ export default function BulkAICheckerPage() {
                                 Remove
                               </Button>
                             </div>
+
+                            {/* AI Percentage + CACHED Badge */}
                             {fileEntry.aiPercentage !== null && (
-                              <p className="text-xs text-teal-400">
-                                AI Percentage: {fileEntry.aiPercentage.toFixed(2)}%
+                              <p className="text-xs flex items-center gap-1">
+                                <span className="text-teal-400">
+                                  AI: {fileEntry.aiPercentage.toFixed(1)}%
+                                </span>
+                                {fileEntry.cached && (
+                                  <span className="text-green-400 text-[10px] bg-green-900/30 px-1 rounded">
+                                    CACHED
+                                  </span>
+                                )}
                               </p>
                             )}
+
                             {fileEntry.error && (
                               <p className="text-xs text-red-400">{fileEntry.error}</p>
                             )}
+
+                            {/* Similarity */}
                             {fileEntry.similarity && "error" in fileEntry.similarity ? (
                               <p className="text-xs text-red-400">{fileEntry.similarity.error}</p>
                             ) : fileEntry.similarity && Object.keys(fileEntry.similarity).length > 0 ? (
@@ -414,6 +464,8 @@ export default function BulkAICheckerPage() {
                                 ))}
                               </div>
                             ) : null}
+
+                            {/* Code Editor */}
                             <div className="mt-2">
                               <Label className="text-xs text-teal-300">Code</Label>
                               {fileEntry.error ? (
