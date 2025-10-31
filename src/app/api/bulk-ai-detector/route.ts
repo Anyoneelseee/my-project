@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     // 2. Call AI detector
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 28000); // 28s safety
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 28s safety
 
       const response = await fetch(AI_DETECTOR_URL, {
         method: "POST",
