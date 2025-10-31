@@ -22,48 +22,78 @@ export async function POST(request: Request) {
     }
 
     const results = await Promise.all(
-      codes.map(async (code: string, index: number) => {
-        const fileNum = index + 1;
-        const cached = await getCachedAI<{ ai_percentage: number }>(code);
-        if (cached) {
-          console.log(`Cache HIT for file ${fileNum}`);
-          return { ai_percentage: cached.ai_percentage, error: null, cached: true };
-        }
+  codes.map(async (code: string, index: number) => {
+    const fileNum = index + 1;
 
-        console.log(`Cache MISS for file ${fileNum}`);
+    // 1. Try cache first
+    const cached = await getCachedAI<{ ai_percentage: number }>(code);
+    if (cached) {
+      console.log(`Cache HIT for file ${fileNum}`);
+      return {
+        ai_percentage: cached.ai_percentage,
+        error: null,
+        cached: true,
+      };
+    }
 
-        try {
-          const response = await fetch(AI_DETECTOR_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
-            signal: AbortSignal.timeout?.(15000),
-          });
+    console.log(`Cache MISS for file ${fileNum}`);
 
-          if (!response.ok) {
-            const txt = await response.text();
-            throw new Error(`HTTP ${response.status}: ${txt}`);
-          }
+    // 2. Call AI detector
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 28000); // 28s safety
 
-          const data = await response.json();
-          const ai_percentage = Number(data.ai_percentage ?? 0);
+      const response = await fetch(AI_DETECTOR_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+        signal: controller.signal,
+      });
 
-          if (isNaN(ai_percentage)) throw new Error("Invalid ai_percentage");
+      clearTimeout(timeoutId);
 
-          await setCachedAI(code, { ai_percentage });
+      if (!response.ok) {
+        const txt = await response.text();
+        throw new Error(`HTTP ${response.status}: ${txt}`);
+      }
 
-          return { ai_percentage, error: null, cached: false };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          console.warn(`AI detection failed for file ${fileNum}:`, msg);
-          return {
-            ai_percentage: null,
-            error: `AI check failed: ${msg}`,
-            cached: false,
-          };
-        }
-      })
-    );
+      const data = await response.json();
+      const ai_percentage = Number(data.ai_percentage ?? 0);
+
+      if (isNaN(ai_percentage)) {
+        throw new Error("Invalid ai_percentage from detector");
+      }
+
+      // 3. Cache result
+      await setCachedAI(code, { ai_percentage });
+
+      return {
+        ai_percentage,
+        error: null,
+        cached: false,
+      };
+    } catch (err: unknown) {
+  const isTimeout =
+    err instanceof Error && err.name === "AbortError";
+
+  const msg =
+    isTimeout
+      ? "AI detector timed out"
+      : err instanceof Error
+      ? err.message
+      : "Unknown error";
+
+  console.warn(`AI detection failed for file ${fileNum}:`, msg);
+
+  return {
+    ai_percentage: null,
+    error: `AI check failed: ${msg}`,
+    cached: false,
+  };
+}
+
+  })
+);
 
     return NextResponse.json(results);
   } catch (error) {
