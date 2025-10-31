@@ -191,7 +191,7 @@ export default function BulkAICheckerPage() {
       try {
         const codes = validFiles.map((f) => f.code);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 30s
+        const timeoutId = setTimeout(() => controller.abort(), 28000); // 30s
 
         const response = await fetch("/api/bulk-ai-detector", {
           method: "POST",
