@@ -1,15 +1,35 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
-import { Upload, FileText, Image as ImageIcon, File, CheckCircle, Trash2 } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Image as ImageIcon,
+  File,
+  CheckCircle,
+  Trash2,
+  PlayCircle,
+} from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface Activity {
+export interface Activity {
   id: string;
   description: string;
   title: string | null;
@@ -17,6 +37,16 @@ interface Activity {
   start_time: string | null;
   deadline: string | null;
   created_at: string | null;
+  submission_type: "code" | "file";
+  class_id: string;
+}
+
+interface ActivitiesListProps {
+  activities: Activity[];
+  classId: string;
+  selectedActivityId: string | null;
+  onStartActivity: (activityId: string) => void;
+  isLoading?: boolean;
 }
 
 interface Submission {
@@ -27,12 +57,13 @@ interface Submission {
   ai_percentage: number | null;
 }
 
-interface ActivitiesListProps {
-  activities: Activity[];
-  classId: string;
-}
-
-export default function ActivitiesList({ activities, classId }: ActivitiesListProps) {
+export default function ActivitiesList({
+  activities,
+  classId,
+  selectedActivityId,
+  onStartActivity,
+  isLoading = false,
+}: ActivitiesListProps) {
   const [signedImageUrls, setSignedImageUrls] = useState<{ [key: string]: string | null }>({});
   const [isDescriptionDialogOpen, setIsDescriptionDialogOpen] = useState<{ [key: string]: boolean }>({});
   const [isImageDialogOpen, setIsImageDialogOpen] = useState<{ [key: string]: boolean }>({});
@@ -41,602 +72,488 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
   const [submissionFileName, setSubmissionFileName] = useState<{ [key: string]: string[] }>({});
   const [submissionIsViewed, setSubmissionIsViewed] = useState<{ [key: string]: boolean[] }>({});
   const [submissionAiPercentage, setSubmissionAiPercentage] = useState<{ [key: string]: (number | null)[] }>({});
-  const [submissionError, setSubmissionError] = useState<{ [key: string]: string | null }>({});
   const [hasSubmission, setHasSubmission] = useState<{ [key: string]: boolean }>({});
   const [uploadError, setUploadError] = useState<{ [key: string]: string | null }>({});
   const [uploadSuccess, setUploadSuccess] = useState<{ [key: string]: boolean }>({});
   const [section, setSection] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: File[] }>({});
 
+  // === INSTANT STATUS ===
+  const getStatus = (start: string | null, deadline: string | null) => {
+    const now = Date.now();
+    if (!start && !deadline) return { text: "No Dates", color: "bg-gray-600" };
+    if (start && new Date(start).getTime() > now)
+      return { text: "Not Started", color: "bg-blue-500" };
+    if (deadline && new Date(deadline).getTime() < now)
+      return { text: "Overdue", color: "bg-red-500" };
+    if (deadline && new Date(deadline).getTime() - now < 86_400_000)
+      return { text: "Due Soon", color: "bg-yellow-500" };
+    return { text: "In Progress", color: "bg-teal-500" };
+  };
+
+  const getFinalStatus = (id: string, baseStatus: ReturnType<typeof getStatus>) => {
+    if (hasSubmission[id]) return { text: "Submitted", color: "bg-green-500" };
+    return baseStatus;
+  };
+
+  /* --------------------------------------------------------------
+     FETCH DATA
+     -------------------------------------------------------------- */
   useEffect(() => {
-    console.log("ActivitiesList received activities:", activities);
+    if (isLoading || activities.length === 0) return;
 
-    // Fetch section
     const fetchSection = async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session || !session.user) {
-          console.error("No session:", sessionError?.message);
-          setUploadError((prev) => ({ ...prev, [classId]: "Please log in to upload files." }));
-          return;
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
 
-        const { data: sectionData, error: sectionError } = await supabase
-          .rpc("get_student_class_section", {
-            class_id_input: classId,
-            student_id_input: session.user.id,
-          });
-
-        if (sectionError) {
-          console.error("Section fetch error:", sectionError.message);
-          setUploadError((prev) => ({ ...prev, [classId]: "Failed to fetch class information." }));
-          return;
-        }
-
-        const result = Array.isArray(sectionData) && sectionData.length > 0
-          ? sectionData[0] as { section: string | null; error_message: string | null }
-          : { section: null, error_message: "No data returned" };
-
-        if (!result.section || result.error_message) {
-          console.error("No section found:", result.error_message);
-          setUploadError((prev) => ({ ...prev, [classId]: "You are not enrolled in this class." }));
-        } else {
-          setSection(result.section);
-          console.log("Section set to:", result.section);
-        }
-      } catch (err) {
-        console.error("Unexpected error fetching section:", err);
-        setUploadError((prev) => ({ ...prev, [classId]: "An unexpected error occurred." }));
-      }
+      const { data } = await supabase.rpc("get_student_class_section", {
+        class_id_input: classId,
+        student_id_input: session.user.id,
+      });
+      const result = Array.isArray(data) && data[0] ? data[0] : null;
+      setSection(result?.section || null);
     };
 
-    // Fetch submissions to determine if "View File Submission" button should be shown
     const fetchSubmissions = async () => {
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError || !session || !session.user) {
-          console.error("No session for submissions:", sessionError?.message);
-          return;
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
 
-        const submissionStatus: { [key: string]: boolean } = {};
-        const fileNames: { [key: string]: string[] } = {};
-        const isViewed: { [key: string]: boolean[] } = {};
-        const aiPercentages: { [key: string]: (number | null)[] } = {};
+      const status: { [k: string]: boolean } = {};
+      const names: { [k: string]: string[] } = {};
+      const viewed: { [k: string]: boolean[] } = {};
+      const ai: { [k: string]: (number | null)[] } = {};
 
-        for (const activity of activities) {
-          const { data: submissionData, error: submissionError } = await supabase
-            .from("submissions")
-            .select("id, file_name, file_path, is_viewed, ai_percentage")
-            .eq("class_id", classId)
-            .eq("activity_id", activity.id)
-            .eq("student_id", session.user.id)
-            .order("submitted_at", { ascending: false });
-          console.log(`Submission data for activity ${activity.id}:`, submissionData);
-          if (submissionError) {
-            console.error(`Failed to fetch submission for activity ${activity.id}:`, submissionError.message);
-            submissionStatus[activity.id] = false;
-            fileNames[activity.id] = [];
-            isViewed[activity.id] = [];
-            aiPercentages[activity.id] = [];
-          } else {
-            submissionStatus[activity.id] = submissionData && submissionData.length > 0;
-            fileNames[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.file_name) : [];
-            isViewed[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.is_viewed || false) : [];
-            aiPercentages[activity.id] = submissionData ? submissionData.map((sub: Submission) => sub.ai_percentage || null) : [];
-          }
-        }
-        setHasSubmission(submissionStatus);
-        setSubmissionFileName(fileNames);
-        setSubmissionIsViewed(isViewed);
-        setSubmissionAiPercentage(aiPercentages);
-      } catch (err) {
-        console.error("Unexpected error fetching submissions:", err);
+      for (const act of activities) {
+        const { data } = await supabase
+          .from("submissions")
+          .select("id, file_name, file_path, is_viewed, ai_percentage")
+          .eq("class_id", classId)
+          .eq("activity_id", act.id)
+          .eq("student_id", session.user.id);
+
+        status[act.id] = !!data?.length;
+        names[act.id] = data?.map((s: Submission) => s.file_name) || [];
+        viewed[act.id] = data?.map((s: Submission) => s.is_viewed) || [];
+        ai[act.id] = data?.map((s: Submission) => s.ai_percentage) || [];
       }
+
+      setHasSubmission(status);
+      setSubmissionFileName(names);
+      setSubmissionIsViewed(viewed);
+      setSubmissionAiPercentage(ai);
     };
 
-    fetchSection();
-    fetchSubmissions();
-
-    // Fetch signed URLs for images
     const fetchSignedUrls = async () => {
-      const urls: { [key: string]: string | null } = {};
-      for (const activity of activities) {
-        if (activity.image_url && !activity.image_url.includes("null")) {
-          try {
-            const { data, error } = await supabase.storage
-              .from("activity-images")
-              .createSignedUrl(activity.image_url, 3600);
-            if (error) {
-              console.error(`Failed to generate signed URL for ${activity.id}:`, error.message);
-              urls[activity.id] = null;
-            } else {
-              urls[activity.id] = data.signedUrl;
-            }
-          } catch (err) {
-            console.error(`Error fetching signed URL for ${activity.id}:`, err);
-            urls[activity.id] = null;
-          }
+      const urls: { [k: string]: string | null } = {};
+      for (const act of activities) {
+        if (act.image_url && !act.image_url.includes("null")) {
+          const { data } = await supabase.storage
+            .from("activity-images")
+            .createSignedUrl(act.image_url, 3600);
+          urls[act.id] = data?.signedUrl || null;
         } else {
-          urls[activity.id] = null;
+          urls[act.id] = null;
         }
       }
       setSignedImageUrls(urls);
     };
 
+    fetchSection();
+    fetchSubmissions();
     fetchSignedUrls();
-    const interval = setInterval(fetchSignedUrls, 300000); // Refresh every 5 minutes
+
+    const interval = setInterval(fetchSignedUrls, 300_000);
     return () => clearInterval(interval);
-  }, [activities, classId]);
+  }, [activities, classId, isLoading]);
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, activityId: string) => {
-    console.error(`Image load failed for activity ${activityId}:`, e);
-    const img = e.target as HTMLImageElement;
-    if (!img.src.includes("/images/placeholder-image.jpg")) {
-      img.src = "/images/placeholder-image.jpg";
-    }
-  };
+  // === IS DATA READY? ===
+  const isDataReady = useMemo(() => {
+    if (isLoading || activities.length === 0) return false;
+    if (!section) return false;
+    if (Object.keys(hasSubmission).length !== activities.length) return false;
+    if (Object.keys(signedImageUrls).length !== activities.length) return false;
+    return true;
+  }, [isLoading, activities, section, hasSubmission, signedImageUrls]);
 
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return "Not set";
-    const date = new Date(dateString);
-    return date.toString() === "Invalid Date" ? "Invalid Date" : date.toLocaleString();
-  };
+  const formatDate = (d: string | null) =>
+    d ? new Date(d).toLocaleString() : "Not set";
 
-  const getStatus = (start_time: string | null, deadline: string | null, activityId: string): { text: string; color: string } => {
-    const now = new Date();
-    const startDate = start_time ? new Date(start_time) : null;
-    const deadlineDate = deadline ? new Date(deadline) : null;
-
-    if (hasSubmission[activityId]) {
-      return { text: "Submitted", color: "bg-green-500" };
-    }
-
-    if (!start_time && !deadline) {
-      return { text: "No Dates Set", color: "bg-gray-600" };
-    }
-    if (startDate && startDate.getTime() > now.getTime()) {
-      return { text: "Not Started", color: "bg-blue-500" };
-    }
-    if (deadlineDate && deadlineDate.getTime() < now.getTime()) {
-      return { text: "Overdue", color: "bg-red-500" };
-    }
-    if (deadlineDate && deadlineDate.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
-      return { text: "Due Soon", color: "bg-yellow-500" };
-    }
-    if (startDate && startDate.getTime() <= now.getTime()) {
-      return { text: "In Progress", color: "bg-teal-500" };
-    }
-    return { text: "Upcoming", color: "bg-teal-500" };
-  };
-
-  const handleUploadClick = (activityId: string) => {
-    if (hasSubmission[activityId]) {
-      return; // Prevent opening dialog if submission exists
-    }
-    setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: true }));
-    setUploadError((prev) => ({ ...prev, [activityId]: null }));
-    setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
-    setSelectedFiles((prev) => ({ ...prev, [activityId]: [] }));
-  };
-
-  const handleViewSubmission = async (activityId: string) => {
-    try {
-      setSubmissionError((prev) => ({ ...prev, [activityId]: null }));
-      setSubmissionFileName((prev) => ({ ...prev, [activityId]: [] }));
-      setSubmissionIsViewed((prev) => ({ ...prev, [activityId]: [] }));
-      setSubmissionAiPercentage((prev) => ({ ...prev, [activityId]: [] }));
-      setIsSubmissionDialogOpen((prev) => ({ ...prev, [activityId]: true }));
-
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session || !session.user) {
-        throw new Error("No valid session available. Please log in again.");
-      }
-
-      const { data: submissionData, error: submissionError } = await supabase
-        .from("submissions")
-        .select("id, file_name, file_path, is_viewed, ai_percentage")
-        .eq("class_id", classId)
-        .eq("activity_id", activityId)
-        .eq("student_id", session.user.id)
-        .order("submitted_at", { ascending: false });
-      console.log(`Submission data for activity ${activityId}:`, submissionData);
-      if (submissionError) {
-        console.error(`Failed to fetch submission for activity ${activityId}:`, submissionError.message);
-        throw new Error("Failed to load submissions.");
-      }
-
-      setSubmissionFileName((prev) => ({
-        ...prev,
-        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.file_name) : [],
-      }));
-      setSubmissionIsViewed((prev) => ({
-        ...prev,
-        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.is_viewed || false) : [],
-      }));
-      setSubmissionAiPercentage((prev) => ({
-        ...prev,
-        [activityId]: submissionData ? submissionData.map((sub: Submission) => sub.ai_percentage || null) : [],
-      }));
-      if (!submissionData || submissionData.length === 0) {
-        throw new Error("No submissions found for this activity.");
-      }
-    } catch (error) {
-      console.error("View submission error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to load submissions";
-      setSubmissionError((prev) => ({ ...prev, [activityId]: errorMessage }));
-    }
-  };
-
-  const handleFileSelect = (activityId: string, files: FileList | null) => {
-    if (!files) return;
-    const validFiles = Array.from(files).filter((file) => {
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      return fileExtension && ['py', 'c', 'cpp', 'java'].includes(fileExtension);
-    });
-    setSelectedFiles((prev) => ({
-      ...prev,
-      [activityId]: [...(prev[activityId] || []), ...validFiles],
-    }));
-    setUploadError((prev) => ({ ...prev, [activityId]: validFiles.length === files.length ? null : "Some files were not supported (.py, .c, .cpp, .java only)." }));
-  };
-
-  const handleRemoveFile = (activityId: string, index: number) => {
-    setSelectedFiles((prev) => ({
-      ...prev,
-      [activityId]: prev[activityId].filter((_, i) => i !== index),
-    }));
-  };
-
- const handleSubmitActivity = async (activityId: string) => {
-  try {
-    // Refresh session to ensure a valid token
-    const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-    console.log("Refreshed session:", session ? "Valid" : "Invalid", "Session Error:", sessionError?.message);
-    if (sessionError || !session || !session.user) {
-      throw new Error("No valid session available. Please log in again.");
-    }
-
-    if (!section) {
-      throw new Error("Section not loaded. Please ensure you are enrolled in this class.");
-    }
-
-    if (!classId) {
-      throw new Error("Class ID is missing");
-    }
-
-    if (!activityId) {
-      throw new Error("Activity ID is missing");
-    }
-
-    const files = selectedFiles[activityId] || [];
-    if (files.length === 0) {
-      throw new Error("No files selected for upload.");
-    }
-
-    // Check for duplicate file names among selected files
-    const fileNames = files.map((file) => file.name);
-    const uniqueFileNames = new Set(fileNames);
-    if (uniqueFileNames.size !== fileNames.length) {
-      throw new Error("Duplicate file names detected. Please select files with unique names.");
-    }
-
-    // Check for existing submissions with the same file names
-    const { data: existingSubmissions, error: existingError } = await supabase
-      .from("submissions")
-      .select("file_name")
-      .eq("class_id", classId)
-      .eq("activity_id", activityId)
-      .eq("student_id", session.user.id);
-    if (existingError) {
-      console.error("Error checking existing file names:", existingError.message);
-      throw new Error("Failed to check for duplicate file names.");
-    }
-
-    const existingFileNames = existingSubmissions?.map((sub) => sub.file_name) || [];
-    const duplicates = fileNames.filter((name) => existingFileNames.includes(name));
-    if (duplicates.length > 0) {
-      throw new Error(`Files already submitted: ${duplicates.join(", ")}.`);
-    }
-
-    // Prepare files array for the API
-    const filesData = await Promise.all(
-      files.map(async (file) => {
-        const fileExtension = file.name.split('.').pop()?.toLowerCase();
-        const fileContent = await file.text();
-        return {
-          code: fileContent,
-          fileName: file.name,
-          language: fileExtension,
-        };
-      })
+  const sorted = useMemo(() => {
+    return [...activities].sort((a, b) =>
+      (b.created_at ?? "").localeCompare(a.created_at ?? "")
     );
+  }, [activities]);
 
-    const requestBody = {
-      files: filesData,
-      classId,
-      activityId,
-      section,
-      studentId: session.user.id,
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token || '',
-    };
+  const isSelected = (id: string) => selectedActivityId === id;
 
-    console.log("Submitting to /api/studentsubmit_code with body:", {
-      ...requestBody,
-      files: requestBody.files.map((f) => ({
-        fileName: f.fileName,
-        language: f.language,
-        codeLength: f.code.length,
-      })),
-      accessToken: requestBody.accessToken.substring(0, 10) + "...",
-      refreshToken: requestBody.refreshToken.substring(0, 10) + "...",
-    });
+  // === HANDLERS (MUST BE INSIDE COMPONENT) ===
+  const handleUploadClick = (id: string) => {
+    if (hasSubmission[id]) return;
+    setIsUploadDialogOpen((p) => ({ ...p, [id]: true }));
+    setUploadError((p) => ({ ...p, [id]: null }));
+    setUploadSuccess((p) => ({ ...p, [id]: false }));
+    setSelectedFiles((p) => ({ ...p, [id]: [] }));
+  };
 
-    const response = await fetch("/api/studentsubmit_code", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+  const handleViewSubmission = async (id: string) => {
+    setIsSubmissionDialogOpen((p) => ({ ...p, [id]: true }));
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
 
-    const data = await response.json();
-    console.log("API Response:", { status: response.status, statusText: response.statusText, data });
-    if (!response.ok) {
-      throw new Error(data.error || `Failed to submit files: ${response.statusText}`);
-    }
-
-    setUploadSuccess((prev) => ({ ...prev, [activityId]: true }));
-    setHasSubmission((prev) => ({ ...prev, [activityId]: true }));
-    setSelectedFiles((prev) => ({ ...prev, [activityId]: [] }));
-
-    // Refresh submissions after upload
-    const { data: submissionData } = await supabase
+    const { data } = await supabase
       .from("submissions")
       .select("id, file_name, file_path, is_viewed, ai_percentage")
       .eq("class_id", classId)
-      .eq("activity_id", activityId)
-      .eq("student_id", session.user.id)
-      .order("submitted_at", { ascending: false });
-    if (submissionData) {
-      setSubmissionFileName((prev) => ({
-        ...prev,
-        [activityId]: submissionData.map((sub: Submission) => sub.file_name),
-      }));
-      setSubmissionIsViewed((prev) => ({
-        ...prev,
-        [activityId]: submissionData.map((sub: Submission) => sub.is_viewed || false),
-      }));
-      setSubmissionAiPercentage((prev) => ({
-        ...prev,
-        [activityId]: submissionData.map((sub: Submission) => sub.ai_percentage || null),
+      .eq("activity_id", id)
+      .eq("student_id", session.user.id);
+
+    setSubmissionFileName((p) => ({ ...p, [id]: data?.map((s) => s.file_name) || [] }));
+    setSubmissionIsViewed((p) => ({ ...p, [id]: data?.map((s) => s.is_viewed) || [] }));
+    setSubmissionAiPercentage((p) => ({ ...p, [id]: data?.map((s) => s.ai_percentage) || [] }));
+  };
+
+  const handleFileSelect = (id: string, files: FileList | null) => {
+    if (!files) return;
+    const valid = Array.from(files).filter((f) =>
+      /\.(py|c|cpp|java)$/i.test(f.name)
+    );
+    setSelectedFiles((p) => ({
+      ...p,
+      [id]: [...(p[id] || []), ...valid],
+    }));
+    setUploadError((p) => ({
+      ...p,
+      [id]: valid.length === files.length ? null : "Only .py, .c, .cpp, .java allowed.",
+    }));
+  };
+
+  const handleRemoveFile = (id: string, idx: number) => {
+    setSelectedFiles((p) => ({
+      ...p,
+      [id]: p[id].filter((_, i) => i !== idx),
+    }));
+  };
+
+  const handleSubmitActivity = async (id: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.refreshSession();
+      if (!session?.user) throw new Error("Please log in again.");
+      if (!section) throw new Error("Section not loaded.");
+
+      const files = selectedFiles[id] || [];
+      if (files.length === 0) throw new Error("No files selected.");
+
+      const fileNames = files.map((f) => f.name);
+      const unique = new Set(fileNames);
+      if (unique.size !== fileNames.length) throw new Error("Duplicate file names.");
+
+      const { data: existing } = await supabase
+        .from("submissions")
+        .select("file_name")
+        .eq("class_id", classId)
+        .eq("activity_id", id)
+        .eq("student_id", session.user.id);
+
+      const existingNames = existing?.map((s) => s.file_name) || [];
+      const dups = fileNames.filter((n) => existingNames.includes(n));
+      if (dups.length) throw new Error(`Already submitted: ${dups.join(", ")}`);
+
+      const filesData = await Promise.all(
+        files.map(async (f) => ({
+          code: await f.text(),
+          fileName: f.name,
+          language: f.name.split(".").pop()?.toLowerCase() ?? "",
+        }))
+      );
+
+      const body = {
+        files: filesData,
+        classId,
+        activityId: id,
+        section,
+        studentId: session.user.id,
+        accessToken: session.access_token,
+        refreshToken: session.refresh_token ?? "",
+      };
+
+      const res = await fetch("/api/studentsubmit_code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Submit failed");
+
+      setHasSubmission((p) => ({ ...p, [id]: true }));
+      setUploadSuccess((p) => ({ ...p, [id]: true }));
+      setSelectedFiles((p) => ({ ...p, [id]: [] }));
+
+      const { data: newSubs } = await supabase
+        .from("submissions")
+        .select("id, file_name, file_path, is_viewed, ai_percentage")
+        .eq("class_id", classId)
+        .eq("activity_id", id)
+        .eq("student_id", session.user.id);
+
+      if (newSubs) {
+        setSubmissionFileName((p) => ({ ...p, [id]: newSubs.map((s) => s.file_name) }));
+        setSubmissionIsViewed((p) => ({ ...p, [id]: newSubs.map((s) => s.is_viewed) }));
+        setSubmissionAiPercentage((p) => ({ ...p, [id]: newSubs.map((s) => s.ai_percentage) }));
+      }
+
+      setTimeout(() => {
+        setIsUploadDialogOpen((p) => ({ ...p, [id]: false }));
+        setUploadSuccess((p) => ({ ...p, [id]: false }));
+      }, 2000);
+    } catch (e: unknown) {
+      setUploadError((p) => ({
+        ...p,
+        [id]: e instanceof Error ? e.message : String(e),
       }));
     }
-    setTimeout(() => {
-      setIsUploadDialogOpen((prev) => ({ ...prev, [activityId]: false }));
-      setUploadSuccess((prev) => ({ ...prev, [activityId]: false }));
-    }, 2000);
-  } catch (error) {
-    console.error("Submission error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to submit activity";
-    setUploadError((prev) => ({ ...prev, [activityId]: errorMessage }));
+  };
+
+  // === FULL PAGE SKELETON ===
+  if (!isDataReady) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+        {[1, 2, 3].map((i) => (
+          <Card
+            key={i}
+            className="rounded-lg bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-teal-500/30 backdrop-blur-sm h-[380px] flex flex-col overflow-hidden"
+          >
+            <CardHeader className="p-4 space-y-3">
+              <Skeleton className="h-6 w-3/4 rounded bg-gray-700" />
+              <Skeleton className="h-5 w-24 rounded-full bg-gray-700" />
+            </CardHeader>
+            <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-32 rounded bg-gray-700" />
+                <Skeleton className="h-4 w-32 rounded bg-gray-700" />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Skeleton className="h-8 flex-1 rounded bg-gray-700" />
+                {i % 2 === 0 && <Skeleton className="h-8 w-20 rounded bg-gray-700" />}
+              </div>
+              <Skeleton className="h-10 w-full rounded mt-4 bg-gray-700" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
-};
 
-  // Sort activities by created_at in descending order (newest first)
-  const sortedActivities = [...activities].sort((a, b) => {
-    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-    return dateB - dateA;
-  });
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-      {sortedActivities.length === 0 ? (
+  // === NO ACTIVITIES ===
+  if (activities.length === 0) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
         <Card className="rounded-lg bg-gradient-to-br from-gray-800/80 to-gray-900/80 border-teal-500/30 backdrop-blur-sm">
           <CardContent className="pt-6">
-            <p className="text-gray-300 text-center py-8 text-lg font-medium">No activities created yet.</p>
+            <p className="text-gray-300 text-center py-8 text-lg font-medium">
+              No activities created yet.
+            </p>
           </CardContent>
         </Card>
-      ) : (
-        sortedActivities.map((activity) => (
+      </div>
+    );
+  }
+
+  // === REAL ACTIVITIES ===
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+      {sorted.map((activity) => {
+        const baseStatus = getStatus(activity.start_time, activity.deadline);
+        const status = getFinalStatus(activity.id, baseStatus);
+        const isInProgress = status.text === "In Progress" || status.text === "Due Soon";
+        const isCodeType = activity.submission_type === "code";
+        const isFileType = activity.submission_type === "file";
+
+        return (
           <article key={activity.id}>
             <Card
-              className="relative rounded-lg border-teal-500/30 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 ease-out h-[360px] flex flex-col overflow-hidden"
-              aria-label={`Activity card: ${activity.title || "Untitled Activity"}`}
+              className={`relative rounded-lg border-teal-500/30 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300 ease-out h-[380px] flex flex-col overflow-hidden ${
+                isSelected(activity.id) ? "ring-2 ring-teal-400" : ""
+              }`}
             >
               <CardHeader className="p-4">
                 <CardTitle className="text-xl font-extrabold text-teal-400 truncate">
                   {activity.title || "Untitled Activity"}
                 </CardTitle>
-                <p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${getStatus(activity.start_time, activity.deadline, activity.id).color} w-fit mt-1`}>
-                  {getStatus(activity.start_time, activity.deadline, activity.id).text}
+                <p className={`text-xs font-semibold text-white px-2 py-1 rounded-full ${status.color} w-fit mt-1`}>
+                  {status.text}
                 </p>
               </CardHeader>
+
               <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between">
-                <div className="flex gap-2 flex-wrap">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-teal-300 hover:text-teal-200 hover:bg-teal-500/20"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsDescriptionDialogOpen((prev) => ({ ...prev, [activity.id]: true }));
-                    }}
-                    aria-label={`View description for ${activity.title || "Untitled Activity"}`}
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    Description
-                  </Button>
-                  {signedImageUrls[activity.id] && !activity.image_url?.includes("null") && (
+                {/* DATES */}
+                <div className="mt-2 space-y-1 text-xs">
+                  <p className="text-teal-300 bg-gray-700/50 px-3 py-1 rounded-full w-fit">
+                    Start: {formatDate(activity.start_time)}
+                  </p>
+                  <p className="text-teal-300 bg-gray-700/50 px-3 py-1 rounded-full w-fit">
+                    Deadline: {formatDate(activity.deadline)}
+                  </p>
+                </div>
+
+                {/* DESCRIPTION & IMAGE */}
+                {isFileType && (
+                  <div className="flex gap-2 flex-wrap mt-4">
                     <Button
                       variant="ghost"
                       size="sm"
                       className="text-teal-300 hover:text-teal-200 hover:bg-teal-500/20"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsImageDialogOpen((prev) => ({ ...prev, [activity.id]: true }));
-                      }}
-                      aria-label={`View image for ${activity.title || "Untitled Activity"}`}
+                      onClick={() => setIsDescriptionDialogOpen((p) => ({ ...p, [activity.id]: true }))}
                     >
-                      <ImageIcon className="w-4 h-4 mr-1" />
-                      Image
+                      <FileText className="w-4 h-4 mr-1" /> Description
                     </Button>
-                  )}
-                  {hasSubmission[activity.id] && (
-                    <div className="flex items-center">
+
+                    {signedImageUrls[activity.id] && (
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-teal-300 hover:text-teal-200 hover:bg-teal-500/20"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewSubmission(activity.id);
-                        }}
-                        aria-label={`View file submissions for ${activity.title || "Untitled Activity"}`}
+                        onClick={() => setIsImageDialogOpen((p) => ({ ...p, [activity.id]: true }))}
                       >
-                        <File className="w-4 h-4 mr-1" />
-                        View File Submissions
+                        <ImageIcon className="w-4 h-4 mr-1" /> Image
                       </Button>
-                      {submissionIsViewed[activity.id].some((viewed) => viewed) && (
-                        <CheckCircle
-                          className="w-4 h-4 ml-2 text-teal-400"
-                          aria-label="At least one submission viewed by professor"
-                        />
+                    )}
+                  </div>
+                )}
+
+                {/* ACTION BUTTONS */}
+                <div className="mt-4">
+                  {isCodeType && (
+                    <>
+                      {!hasSubmission[activity.id] && isInProgress && (
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => onStartActivity(activity.id)}
+                            className="bg-teal-600 hover:bg-teal-700"
+                          >
+                            <PlayCircle className="w-5 h-5 mr-2" />
+                            Start Activity
+                          </Button>
+                        </div>
                       )}
-                    </div>
+
+                      {hasSubmission[activity.id] && (
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => handleViewSubmission(activity.id)}
+                            className="bg-teal-600 hover:bg-teal-700 text-sm"
+                          >
+                            <File className="w-5 h-5 mr-2" />
+                            View Submissions
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-teal-300 hover:text-teal-200 hover:bg-teal-500/20"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUploadClick(activity.id);
-                    }}
-                    disabled={hasSubmission[activity.id]}
-                    aria-label={hasSubmission[activity.id] ? "Submissions already made" : `Upload file for ${activity.title || "Untitled Activity"}`}
-                  >
-                    <Upload className="w-4 h-4 mr-1" />
-                    Upload File
-                  </Button>
+
+                  {isFileType && (
+                    <>
+                      {!hasSubmission[activity.id] && (
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => handleUploadClick(activity.id)}
+                            className="bg-teal-600 hover:bg-teal-700"
+                          >
+                            <Upload className="w-5 h-5 mr-2" />
+                            Upload File
+                          </Button>
+                        </div>
+                      )}
+
+                      {hasSubmission[activity.id] && (
+                        <div className="flex justify-center">
+                          <Button
+                            onClick={() => handleViewSubmission(activity.id)}
+                            className="bg-teal-600 hover:bg-teal-700 text-sm"
+                          >
+                            <File className="w-5 h-5 mr-2" />
+                            View Submissions
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-                <CardFooter className="p-0 mt-4 flex flex-col gap-1">
-                  <p
-                    className="text-xs font-medium text-teal-300 bg-gray-700/50 px-3 py-1 rounded-full w-fit"
-                    aria-label={`Start date: ${formatDate(activity.start_time)}`}
-                  >
-                    Start: {formatDate(activity.start_time)}
-                  </p>
-                  <p
-                    className="text-xs font-medium text-teal-300 bg-gray-700/50 px-3 py-1 rounded-full w-fit"
-                    aria-label={`Deadline: ${formatDate(activity.deadline)}`}
-                  >
-                    Deadline: {formatDate(activity.deadline)}
-                  </p>
-                </CardFooter>
               </CardContent>
-              <Dialog
-                open={isDescriptionDialogOpen[activity.id] || false}
-                onOpenChange={(open) => setIsDescriptionDialogOpen((prev) => ({ ...prev, [activity.id]: open }))}
-              >
+
+              {/* DIALOGS */}
+              <Dialog open={isDescriptionDialogOpen[activity.id] || false} onOpenChange={(open) => setIsDescriptionDialogOpen((p) => ({ ...p, [activity.id]: open }))}>
                 <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-extrabold text-teal-400">
                       {activity.title || "Untitled Activity"}
                     </DialogTitle>
-                    <DialogDescription className="text-teal-300 text-sm">
-                      Activity description
-                    </DialogDescription>
+                    <DialogDescription className="text-teal-300 text-sm">Activity description</DialogDescription>
                   </DialogHeader>
                   <div className="text-teal-200 text-base max-h-[50vh] overflow-y-auto">
                     {activity.description || "No description available"}
                   </div>
                   <DialogFooter className="mt-4">
-                    <Button
-                      onClick={() => setIsDescriptionDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
-                    >
+                    <Button onClick={() => setIsDescriptionDialogOpen((p) => ({ ...p, [activity.id]: false }))} className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg">
                       Close
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Dialog
-                open={isImageDialogOpen[activity.id] || false}
-                onOpenChange={(open) => setIsImageDialogOpen((prev) => ({ ...prev, [activity.id]: open }))}
-              >
+
+              <Dialog open={isImageDialogOpen[activity.id] || false} onOpenChange={(open) => setIsImageDialogOpen((p) => ({ ...p, [activity.id]: open }))}>
                 <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-extrabold text-teal-400">
                       {activity.title || "Untitled Activity"} Image
                     </DialogTitle>
-                    <DialogDescription className="text-teal-300 text-sm">
-                      Activity image
-                    </DialogDescription>
                   </DialogHeader>
                   <div className="flex justify-center">
                     <Image
                       src={signedImageUrls[activity.id] || "/images/placeholder-image.jpg"}
-                      alt={`Activity ${activity.title || "Untitled"}`}
+                      alt={activity.title || "Activity"}
                       width={800}
                       height={600}
                       className="rounded-md max-w-full max-h-[50vh] object-contain"
                       unoptimized
                       loading="lazy"
-                      onError={(e) => handleImageError(e, activity.id)}
                     />
                   </div>
                   <DialogFooter className="mt-4">
-                    <Button
-                      onClick={() => setIsImageDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
-                    >
+                    <Button onClick={() => setIsImageDialogOpen((p) => ({ ...p, [activity.id]: false }))} className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg">
                       Close
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Dialog
-                open={isSubmissionDialogOpen[activity.id] || false}
-                onOpenChange={(open) => setIsSubmissionDialogOpen((prev) => ({ ...prev, [activity.id]: open }))}
-              >
+
+              <Dialog open={isSubmissionDialogOpen[activity.id] || false} onOpenChange={(open) => setIsSubmissionDialogOpen((p) => ({ ...p, [activity.id]: open }))}>
                 <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
                   <DialogHeader>
                     <DialogTitle className="text-2xl font-extrabold text-teal-400">
-                      {activity.title || "Untitled Activity"} File Submissions
+                      {activity.title || "Untitled Activity"} Submissions
                     </DialogTitle>
-                    <DialogDescription className="text-teal-300 text-sm">
-                      Your submitted files for this activity
-                    </DialogDescription>
                   </DialogHeader>
                   <div className="text-teal-200 text-base max-h-[50vh] overflow-y-auto">
-                    {submissionError[activity.id] ? (
-                      <p className="text-red-400">{submissionError[activity.id]}</p>
-                    ) : submissionFileName[activity.id]?.length > 0 ? (
+                    {submissionFileName[activity.id]?.length > 0 ? (
                       <div className="flex flex-col gap-4">
-                        {submissionFileName[activity.id].map((fileName, index) => (
-                          <div key={index} className="border-b border-teal-500/30 pb-2">
-                            <p><span className="font-semibold">File {index + 1}:</span> {fileName}</p>
+                        {submissionFileName[activity.id].map((name, i) => (
+                          <div key={i} className="border-b border-teal-500/30 pb-2">
+                            <p><span className="font-semibold">File {i + 1}:</span> {name}</p>
                             <p>
                               <span className="font-semibold">Professor Viewed:</span>{" "}
-                              {submissionIsViewed[activity.id][index] ? (
-                                <span className="text-teal-400 flex items-center">
-                                  Yes <CheckCircle className="w-4 h-4 ml-1" />
-                                </span>
-                              ) : (
-                                "No"
-                              )}
+                              {submissionIsViewed[activity.id][i] ? (
+                                <span className="text-teal-400 flex items-center">Yes <CheckCircle className="w-4 h-4 ml-1" /></span>
+                              ) : "No"}
                             </p>
                             <p>
-                              <span className="font-semibold">AI-Generated Percentage:</span>{" "}
-                              {submissionAiPercentage[activity.id][index] !== null ? (
-                                `${submissionAiPercentage[activity.id][index]?.toFixed(2)}%`
-                              ) : (
-                                <span className="text-teal-300">Not yet analyzed</span>
-                              )}
+                              <span className="font-semibold">AI-Generated %:</span>{" "}
+                              {submissionAiPercentage[activity.id][i] !== null
+                                ? `${submissionAiPercentage[activity.id][i]?.toFixed(2)}%`
+                                : "Not analyzed"}
                             </p>
                           </div>
                         ))}
@@ -646,91 +563,72 @@ export default function ActivitiesList({ activities, classId }: ActivitiesListPr
                     )}
                   </div>
                   <DialogFooter className="mt-4">
-                    <Button
-                      onClick={() => setIsSubmissionDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
-                    >
+                    <Button onClick={() => setIsSubmissionDialogOpen((p) => ({ ...p, [activity.id]: false }))} className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg">
                       Close
                     </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Dialog
-                open={isUploadDialogOpen[activity.id] || false}
-                onOpenChange={(open) => setIsUploadDialogOpen((prev) => ({ ...prev, [activity.id]: open }))}
-              >
-                <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle className="text-2xl font-extrabold text-teal-400">
-                      Upload Files for {activity.title || "Untitled Activity"}
-                    </DialogTitle>
-                    <DialogDescription className="text-teal-300 text-sm">
-                      Select one or more .py, .c, .cpp, or .java files to submit.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <Input
-                      type="file"
-                      accept=".py,.c,.cpp,.java"
-                      multiple
-                      onChange={(e: { target: { files: FileList | null; }; }) => handleFileSelect(activity.id, e.target.files)}
-                      className="text-teal-300 border-teal-500/30 focus:ring-2 focus:ring-teal-400"
-                      aria-label="Upload multiple files input"
-                      disabled={hasSubmission[activity.id]}
-                    />
-                    {selectedFiles[activity.id]?.length > 0 && (
-                      <div className="text-teal-200 text-sm max-h-[20vh] overflow-y-auto">
-                        <p className="font-semibold mb-2">Selected Files:</p>
-                        <ul className="space-y-2">
-                          {selectedFiles[activity.id].map((file, index) => (
-                            <li key={index} className="flex items-center justify-between">
-                              <span>{file.name}</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-red-400 hover:text-red-300"
-                                onClick={() => handleRemoveFile(activity.id, index)}
-                                aria-label={`Remove file ${file.name}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {uploadError[activity.id] && (
-                      <p className="text-red-400 text-sm" aria-live="polite">
-                        {uploadError[activity.id]}
-                      </p>
-                    )}
-                    {uploadSuccess[activity.id] && (
-                      <p className="text-teal-400 text-sm" aria-live="polite">
-                        Files uploaded successfully!
-                      </p>
-                    )}
-                  </div>
-                  <DialogFooter className="mt-4 flex flex-row gap-2">
-                    <Button
-                      onClick={() => setIsUploadDialogOpen((prev) => ({ ...prev, [activity.id]: false }))}
-                      className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={() => handleSubmitActivity(activity.id)}
-                      className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
-                      disabled={hasSubmission[activity.id] || !selectedFiles[activity.id]?.length}
-                    >
-                      Submit
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+
+              {isFileType && (
+                <Dialog open={isUploadDialogOpen[activity.id] || false} onOpenChange={(open) => setIsUploadDialogOpen((p) => ({ ...p, [activity.id]: open }))}>
+                  <DialogContent className="bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-teal-500/30 rounded-lg backdrop-blur-md p-6 max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-extrabold text-teal-400">
+                        Upload Files for {activity.title || "Untitled Activity"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <input
+                        type="file"
+                        accept=".py,.c,.cpp,.java"
+                        multiple
+                        onChange={(e) => handleFileSelect(activity.id, e.target.files)}
+                        className="text-teal-300 border-teal-500/30 focus:ring-2 focus:ring-teal-400"
+                        disabled={hasSubmission[activity.id]}
+                      />
+                      {selectedFiles[activity.id]?.length > 0 && (
+                        <div className="text-teal-200 text-sm max-h-[20vh] overflow-y-auto">
+                          <p className="font-semibold mb-2">Selected Files:</p>
+                          <ul className="space-y-2">
+                            {selectedFiles[activity.id].map((f, i) => (
+                              <li key={i} className="flex items-center justify-between">
+                                <span>{f.name}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-400 hover:text-red-300"
+                                  onClick={() => handleRemoveFile(activity.id, i)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {uploadError[activity.id] && <p className="text-red-400 text-sm">{uploadError[activity.id]}</p>}
+                      {uploadSuccess[activity.id] && <p className="text-teal-400 text-sm">Files uploaded successfully!</p>}
+                    </div>
+                    <DialogFooter className="mt-4 flex flex-row gap-2">
+                      <Button onClick={() => setIsUploadDialogOpen((p) => ({ ...p, [activity.id]: false }))} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 rounded-lg">
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => handleSubmitActivity(activity.id)}
+                        className="bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg"
+                        disabled={hasSubmission[activity.id] || !selectedFiles[activity.id]?.length}
+                      >
+                        Submit
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </Card>
           </article>
-        ))
-      )}
+        );
+      })}
     </div>
   );
 }

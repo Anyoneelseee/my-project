@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label, Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, Upload, Code } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -47,6 +47,7 @@ export function CreateActivityDialog({
     new Date(new Date().setDate(new Date().getDate() + 7))
   );
   const [deadlineTime, setDeadlineTime] = useState("23:59");
+  const [submissionType, setSubmissionType] = useState<"code" | "file">("file");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,6 +117,7 @@ export function CreateActivityDialog({
           image_url: imagePath,
           start_time: combineDateTime(startDate, startTime),
           deadline: combineDateTime(deadlineDate, deadlineTime),
+          submission_type: submissionType, // NEW FIELD
         },
       ]);
 
@@ -125,6 +127,7 @@ export function CreateActivityDialog({
         return;
       }
 
+      // Reset form
       setTitle("");
       setDescription("");
       setImage(null);
@@ -132,6 +135,7 @@ export function CreateActivityDialog({
       setStartTime("10:00");
       setDeadlineDate(new Date(new Date().setDate(new Date().getDate() + 7)));
       setDeadlineTime("23:59");
+      setSubmissionType("file");
       setIsSubmitting(false);
       onOpenChange(false);
       onActivityCreated();
@@ -204,11 +208,7 @@ export function CreateActivityDialog({
               <ChevronDownIcon className="text-teal-400" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            side="bottom"
-            className="bg-gray-800 border border-teal-500/20 rounded-2xl shadow-lg p-4 w-fit
-                       fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
-          >
+          <PopoverContent className="bg-gray-800 border border-teal-500/20 rounded-2xl shadow-lg p-4 w-fit">
             <Calendar
               mode="single"
               selected={date}
@@ -216,7 +216,7 @@ export function CreateActivityDialog({
                 setDate(d);
                 setOpenCalendar(false);
               }}
-              className="bg-gray-800 text-gray-200 [&_.rdp-day_selected]:bg-teal-500 [&_.rdp-day_selected]:text-white [&_.rdp-day_today]:text-teal-400 [&_.rdp-day_hover]:bg-teal-600/20"
+              className="bg-gray-800 text-gray-200 [&_.rdp-day_selected]:bg-teal-500 [&_.rdp-day_selected]:text-white [&_.rdp-day_today]:text-teal-400"
             />
           </PopoverContent>
         </Popover>
@@ -231,10 +231,7 @@ export function CreateActivityDialog({
               <ChevronDownIcon className="text-teal-400" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent
-            className="w-56 p-4 bg-gray-800 border border-teal-500/20 rounded-2xl shadow-lg flex flex-col gap-3
-                       fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50"
-          >
+          <PopoverContent className="w-56 p-4 bg-gray-800 border border-teal-500/20 rounded-2xl shadow-lg flex flex-col gap-3">
             <div className="flex gap-2 justify-center">
               <select
                 value={tempTime.hours}
@@ -244,9 +241,7 @@ export function CreateActivityDialog({
                 {Array.from({ length: 12 }, (_, i) =>
                   (i + 1).toString().padStart(2, "0")
                 ).map((h) => (
-                  <option key={h} value={h}>
-                    {h}
-                  </option>
+                  <option key={h} value={h}>{h}</option>
                 ))}
               </select>
               <span className="text-gray-200 self-center mx-1.5">:</span>
@@ -258,9 +253,7 @@ export function CreateActivityDialog({
                 {Array.from({ length: 60 }, (_, i) =>
                   i.toString().padStart(2, "0")
                 ).map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </div>
@@ -308,6 +301,7 @@ export function CreateActivityDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
+          {/* Title */}
           <div className="flex items-center gap-4">
             <Label className="w-40 text-sm font-medium text-teal-300" htmlFor="title">
               Title
@@ -316,12 +310,13 @@ export function CreateActivityDialog({
               id="title"
               type="text"
               value={title}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
               className="w-full md:w-96 border border-gray-600 rounded-lg p-2 bg-gray-700/50 text-gray-200 focus:ring-2 focus:ring-teal-500"
               placeholder="e.g., Factorial Program Assignment"
             />
           </div>
 
+          {/* Description */}
           <div className="flex items-start gap-4">
             <Label className="w-40 text-sm font-medium text-teal-300 pt-2" htmlFor="description">
               Description
@@ -329,29 +324,41 @@ export function CreateActivityDialog({
             <textarea
               id="description"
               value={description}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setDescription(e.target.value)
-              }
+              onChange={(e) => setDescription(e.target.value)}
               className="w-full md:w-[385px] h-32 border border-gray-600 rounded-lg p-2 bg-gray-700/50 text-gray-200 focus:ring-2 focus:ring-teal-500 resize-none"
               placeholder="e.g., Write a program to calculate the factorial of a number."
             />
           </div>
 
-          <DateTimePicker
-            label="Start Time"
-            date={startDate}
-            setDate={setStartDate}
-            time={startTime}
-            setTime={setStartTime}
-          />
-          <DateTimePicker
-            label="Deadline"
-            date={deadlineDate}
-            setDate={setDeadlineDate}
-            time={deadlineTime}
-            setTime={setDeadlineTime}
-          />
+          {/* Submission Type Toggle */}
+          <div className="flex items-center gap-4">
+            <Label className="w-40 text-sm font-medium text-teal-300">Submission</Label>
+            <div className="flex gap-2">
+              <Button
+                variant={submissionType === "code" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSubmissionType("code")}
+                className="flex items-center gap-1"
+              >
+                <Code className="w-4 h-4" />
+                Code Editor
+              </Button>
+              <Button
+                variant={submissionType === "file" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSubmissionType("file")}
+                className="flex items-center gap-1"
+              >
+                <Upload className="w-4 h-4" />
+                File Upload
+              </Button>
+            </div>
+          </div>
 
+          <DateTimePicker label="Start Time" date={startDate} setDate={setStartDate} time={startTime} setTime={setStartTime} />
+          <DateTimePicker label="Deadline" date={deadlineDate} setDate={setDeadlineDate} time={deadlineTime} setTime={setDeadlineTime} />
+
+          {/* Image */}
           <div className="flex items-center gap-4">
             <Label className="w-40 text-sm font-medium text-teal-300" htmlFor="image">
               Image (Optional)
@@ -360,7 +367,7 @@ export function CreateActivityDialog({
               id="image"
               type="file"
               accept="image/*"
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleImageChange(e)}
+              onChange={handleImageChange}
               className="w-55 h-10 border border-gray-600 rounded-lg p-1 bg-gray-700/50 text-gray-200 
                          file:h-8 file:px-4 file:bg-teal-500 file:text-white file:rounded-lg"
             />

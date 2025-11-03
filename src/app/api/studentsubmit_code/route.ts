@@ -22,8 +22,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized: Missing or invalid Authorization header" }, { status: 401 });
     }
 
-    const { files, classId, activityId, section, studentId, accessToken, refreshToken } = await request.json();
-    console.log("Request body:", {
+const accessToken = authHeader.split(" ")[1];
+const { files, classId, activityId, section, studentId, refreshToken } = await request.json();    console.log("Request body:", {
       files: files?.map((f: UploadedFile) => ({
         fileName: f.fileName,
         language: f.language,
@@ -38,8 +38,7 @@ export async function POST(request: Request) {
     });
 
     // Validate required fields
-    if (!files || !Array.isArray(files) || files.length === 0 || !classId || !activityId || !section || !studentId || !accessToken || !refreshToken) {
-      console.error("Missing fields:", {
+if (!files || !Array.isArray(files) || files.length === 0 || !classId || !activityId || !section || !studentId || !refreshToken) {      console.error("Missing fields:", {
         files: !!files,
         isArray: Array.isArray(files),
         filesLength: files?.length,

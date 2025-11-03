@@ -10,6 +10,7 @@ import ClassDetails from "./components/ClassDetails";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Info, List, Code } from "lucide-react";
 import { PostgrestError } from "@supabase/supabase-js";
+import { Activity } from "./components/ActivitiesList";
 
 interface Professor {
   id: string;
@@ -38,23 +39,16 @@ interface RawClassData {
   users: Professor | Professor[];
 }
 
-interface Activity {
-  id: string;
-  description: string;
-  title: string | null;
-  image_url: string | null;
-  created_at: string | null;
-  start_time: string | null;
-  deadline: string | null;
-}
 
 export default function JoinedClassPage() {
   const { classId } = useParams() as { classId: string };
   const router = useRouter();
+
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<"details" | "activities" | "code">("details");
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
   useEffect(() => {
     const initialize = async () => {
@@ -123,7 +117,6 @@ export default function JoinedClassPage() {
           return;
         }
 
-        console.log("Raw Data:", rawData);
         let professor: Professor;
         if (Array.isArray(rawData.users)) {
           professor = rawData.users.find((u) => u.id === rawData.professor_id) || {
@@ -153,17 +146,6 @@ export default function JoinedClassPage() {
           users: professor,
         };
 
-        const classDataForDetails = {
-          id: formattedClassData.id,
-          name: formattedClassData.name,
-          section: formattedClassData.section,
-          course: formattedClassData.course,
-          code: formattedClassData.code,
-          professorName: professor.first_name + " " + professor.last_name,
-          professorEmail: professor.email,
-        };
-
-        console.log("Formatted Class Data for Details:", classDataForDetails);
         setClassData(formattedClassData);
 
         const { data: activitiesData, error: activitiesError } = await supabase
@@ -173,10 +155,9 @@ export default function JoinedClassPage() {
           console.error("Activities error:", activitiesError?.message);
           setActivities([]);
         } else {
-          console.log("Fetched activities:", activitiesData);
           setActivities(
             activitiesData.filter(
-              (act: Activity): act is Activity =>
+              (act): act is Activity =>
                 act &&
                 typeof act.id === "string" &&
                 typeof act.description === "string" &&
@@ -203,6 +184,16 @@ export default function JoinedClassPage() {
     router.push("/dashboard/student");
   };
 
+  const handleStartActivity = (activityId: string) => {
+    setSelectedActivityId(activityId);
+    setActiveSection("code");
+  };
+
+  const handleSubmitSuccess = () => {
+    // Trigger re-fetch of activities to update submission status
+    setActivities((prev) => [...prev]);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
@@ -225,12 +216,13 @@ export default function JoinedClassPage() {
     section: classData.section,
     course: classData.course,
     code: classData.code,
-    professorName: classData.users.first_name + " " + classData.users.last_name,
+    professorName: `${classData.users.first_name} ${classData.users.last_name}`,
     professorEmail: classData.users.email,
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200 flex">
+      {/* Sidebar - Desktop */}
       <aside className="hidden md:block w-64 bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-r border-teal-500/30 backdrop-blur-md">
         <div className="p-4 border-b border-teal-500/20">
           <h2 className="text-lg font-extrabold text-teal-400 truncate">{classData.name}</h2>
@@ -242,7 +234,6 @@ export default function JoinedClassPage() {
               activeSection === "details" ? "bg-teal-500/30 text-teal-200" : ""
             }`}
             onClick={() => setActiveSection("details")}
-            aria-label="View class details"
           >
             <Info className="w-4 h-4 mr-2" />
             Class Details
@@ -253,7 +244,6 @@ export default function JoinedClassPage() {
               activeSection === "activities" ? "bg-teal-500/30 text-teal-200" : ""
             }`}
             onClick={() => setActiveSection("activities")}
-            aria-label="View activities"
           >
             <List className="w-4 h-4 mr-2" />
             Activities
@@ -264,7 +254,7 @@ export default function JoinedClassPage() {
               activeSection === "code" ? "bg-teal-500/30 text-teal-200" : ""
             }`}
             onClick={() => setActiveSection("code")}
-            aria-label="Open code editor"
+            disabled={!selectedActivityId}
           >
             <Code className="w-4 h-4 mr-2" />
             Code Editor
@@ -272,6 +262,7 @@ export default function JoinedClassPage() {
         </nav>
       </aside>
 
+      {/* Mobile Nav */}
       <nav className="md:hidden bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-b border-teal-500/20 p-4 flex gap-2">
         <Button
           variant={activeSection === "details" ? "default" : "ghost"}
@@ -279,7 +270,6 @@ export default function JoinedClassPage() {
             activeSection === "details" ? "bg-teal-500/30 text-teal-200" : ""
           }`}
           onClick={() => setActiveSection("details")}
-          aria-label="View class details"
         >
           <Info className="w-4 h-4 mr-2" />
           Details
@@ -290,7 +280,6 @@ export default function JoinedClassPage() {
             activeSection === "activities" ? "bg-teal-500/30 text-teal-200" : ""
           }`}
           onClick={() => setActiveSection("activities")}
-          aria-label="View activities"
         >
           <List className="w-4 h-4 mr-2" />
           Activities
@@ -301,10 +290,10 @@ export default function JoinedClassPage() {
             activeSection === "code" ? "bg-teal-500/30 text-teal-200" : ""
           }`}
           onClick={() => setActiveSection("code")}
-          aria-label="Open code editor"
+          disabled={!selectedActivityId}
         >
           <Code className="w-4 h-4 mr-2" />
-          Code Editor
+          Code
         </Button>
       </nav>
 
@@ -313,11 +302,10 @@ export default function JoinedClassPage() {
           <Button
             onClick={handleBack}
             variant="ghost"
-            className="flex items-center gap-2 text-teal-400 hover:bg-teal-500/20 rounded-lg transition-all duration-200"
-            aria-label="Back to dashboard"
+            className="flex items-center gap-2 text-teal-400 hover:bg-teal-500/20 rounded-lg"
           >
             <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
+            Back
           </Button>
           <h1 className="text-xl md:text-2xl font-extrabold text-teal-400">
             {classData.name} - {classData.section}
@@ -326,22 +314,37 @@ export default function JoinedClassPage() {
 
         <main className="p-4 md:p-6 w-full flex-1">
           {activeSection === "details" && (
-            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl animate-in fade-in duration-300 w-full">
+            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl p-6">
               <ClassDetails classData={classDataForDetails} />
             </section>
           )}
+
           {activeSection === "activities" && (
-            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl animate-in fade-in duration-300 w-full">
+            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl p-6">
               <ActivitiesList
                 activities={activities}
                 classId={classId}
+                selectedActivityId={selectedActivityId}
+                onStartActivity={handleStartActivity}
+                isLoading={isLoading} // ← pass your loading state
               />
             </section>
           )}
-          {activeSection === "code" && (
-            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl animate-in fade-in duration-300 w-full">
-              <CodeEditorSection classId={classId} />
+
+          {activeSection === "code" && selectedActivityId && (
+            <section className="h-full">
+              <CodeEditorSection
+                classId={classId}
+                activityId={selectedActivityId}
+                onSubmitSuccess={handleSubmitSuccess}
+              />
             </section>
+          )}
+
+          {activeSection === "code" && !selectedActivityId && (
+            <div className="flex items-center justify-center h-full text-gray-400">
+              <p>Select an activity first to open the code editor.</p>
+            </div>
           )}
         </main>
       </div>
