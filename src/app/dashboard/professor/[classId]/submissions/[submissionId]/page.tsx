@@ -56,18 +56,31 @@ interface StudentProfile {
   last_name: string;
 }
 
+interface ExecutionStep {
+  id: number;
+  inputsSoFar: string[];
+  output: string;
+  error: string;
+  status: string;
+  needsInput: boolean;
+}
+
 export default function SubmissionViewPage() {
   const { classId, submissionId } = useParams();
   const router = useRouter();
   const [classData, setClassData] = useState<Class | null>(null);
   const [code, setCode] = useState<string>("");
-  const [output, setOutput] = useState<string[]>([]);
   const [error, setError] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [studentName, setStudentName] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
   const [language, setLanguage] = useState<string>("");
+  const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
+const [currentStep, setCurrentStep] = useState(0);
+const [userInput, setUserInput] = useState("");
+const [totalInputsNeeded, setTotalInputsNeeded] = useState(0);
+const [, setPrompts] = useState<string[]>([]);
   const [aiPercentage, setAiPercentage] = useState<number | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [similarSubmissions, setSimilarSubmissions] = useState<Submission[]>([]);
@@ -76,12 +89,30 @@ export default function SubmissionViewPage() {
   const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
   const editorRef = useRef<React.ComponentRef<typeof AceEditor>>(null);
 
+const isWaitingForInput = executionSteps.length > 0 && executionSteps[executionSteps.length - 1].needsInput && !isRunning;
   const languageIdMap: { [key: string]: number } = {
-    python: 71,
-    cpp: 54,
-    c: 50,
-    java: 62,
-  };
+  python: 71,
+  cpp: 54,
+  c: 50,
+  java: 62,
+};
+
+const inputPatterns: { [key: string]: RegExp[] } = {
+  python: [/input\s*\(\s*\)/g, /input\s*\(\s*("[^"]*"|'[^']*')\s*\)/g, /sys\.stdin\.readline\s*\(\s*\)/g],
+  cpp: [/cin\s*>>/g, /getline\s*\(\s*cin\s*,/g],
+  c: [/scanf\s*\(/g, /fgets\s*\(/g],
+  java: [/scanner\.nextLine\s*\(\s*\)/g, /scanner\.nextInt\s*\(\s*\)/g, /bufferedReader\.readLine\s*\(\s*\)/g],
+};
+
+const analyzeInputsNeeded = (code: string, language: string): number => {
+  if (!inputPatterns[language]) return 0;
+  let inputCount = 0;
+  inputPatterns[language].forEach((pattern) => {
+    const matches = code.match(pattern) || [];
+    inputCount += matches.length;
+  });
+  return inputCount || 1;
+};
 
   const supportedLanguages = Object.keys(languageIdMap);
 
@@ -101,93 +132,153 @@ export default function SubmissionViewPage() {
     }
   };
 
-  const submitCodeToJudge0 = async (sourceCode: string, langId: number) => {
-    try {
-      const response = await fetch("/api/judge0", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_code: sourceCode, language_id: langId }),
-      });
+  const submitCodeToJudge0 = async (sourceCode: string, langId: number, stdin: string = "") => {
+  try {
+    const response = await fetch("/api/judge0", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        source_code: sourceCode, 
+        language_id: langId,
+        stdin 
+      }),
+    });
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          setShowApiLimitDialog(true);
-          setIsRunning(false);
-          return null;
-        }
-        const errorMessage = await response.text();
-        throw new Error(`Judge0 submission failed: ${response.statusText} - ${errorMessage}`);
+    if (!response.ok) {
+      if (response.status === 429) {
+        setShowApiLimitDialog(true);
+        setIsRunning(false);
+        return null;
       }
+      const errorMessage = await response.text();
+      throw new Error(`Judge0 submission failed: ${response.statusText} - ${errorMessage}`);
+    }
 
+    const data = await response.json();
+    return data.token;
+  } catch (err) {
+    setConnectionErrorMessage(
+      err instanceof Error ? err.message : "Failed to connect to the code execution server."
+    );
+    setShowConnectionErrorDialog(true);
+    setIsRunning(false);
+    return null;
+  }
+};
+
+  const pollJudge0Result = async (token: string, currentStep: number, totalInputsNeeded: number) => {
+  try {
+    let attempts = 0;
+    const maxAttempts = 20;
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    while (attempts < maxAttempts) {
+      const response = await fetch(`/api/judge0?token=${token}`);
+      if (!response.ok) throw new Error(`Poll failed: ${response.status}`);
       const data = await response.json();
-      return data.token;
-    } catch (err) {
-      setConnectionErrorMessage(
-        err instanceof Error ? err.message : "Failed to connect to the code execution server."
-      );
-      setShowConnectionErrorDialog(true);
-      setIsRunning(false);
-      return null;
-    }
-  };
 
-  const pollJudge0Result = async (token: string): Promise<{ stdout: string; stderr: string; status: string }> => {
-    try {
-      let attempts = 0;
-      const maxAttempts = 20;
-      const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+      if (data.status.id > 2) {
+        let stdout = "", stderr = "";
+        if (data.stdout) stdout = atob(data.stdout).replace(/\0/g, "");
+        if (data.stderr) stderr = atob(data.stderr).replace(/\0/g, "");
 
-      while (attempts < maxAttempts) {
-        const response = await fetch(`/api/judge0?token=${token}`);
-        if (!response.ok) {
-          const errorMessage = await response.text();
-          throw new Error(`Judge0 polling failed: ${response.statusText} - ${errorMessage}`);
+        const needsInput =
+          currentStep < totalInputsNeeded &&
+          ((language === "python" && (stderr.includes("EOFError") || stderr.includes("ValueError"))) ||
+           (language === "c" || language === "cpp") ||
+           (language === "java" && stderr.includes("NoSuchElementException")));
+
+        let displayError = stderr;
+        if (needsInput) {
+          displayError = stderr.includes("EOFError") || stderr.includes("NoSuchElementException") || (language === "c" || language === "cpp")
+            ? "[Info] Waiting for input..."
+            : "[Error] Invalid input, please try again";
         }
 
-        const data = await response.json();
-        if (data.status.id > 2) {
-          return { stdout: data.stdout || "", stderr: data.stderr || "", status: data.status.description };
+        const outputLines = (language === "cpp" || language === "c" || language === "java")
+          ? stdout.split(/(?<=:\s)/)
+          : stdout.split("\n");
+        const filteredLines = outputLines.filter((line) => line.trim());
+        if (currentStep === 0) setPrompts(filteredLines);
+
+        let newOutput = "";
+        if (currentStep < totalInputsNeeded) {
+          newOutput = filteredLines[currentStep] || "";
+        } else {
+          newOutput = filteredLines[filteredLines.length - 1] || "";
         }
 
-        attempts++;
-        await delay(1000);
+        return { stdout: newOutput.trim(), stderr: displayError.trim(), status: data.status.description, needsInput };
       }
-
-      throw new Error("Code execution timed out");
-    } catch (err) {
-      setConnectionErrorMessage(
-        err instanceof Error ? err.message : "Failed to retrieve code execution results."
-      );
-      setShowConnectionErrorDialog(true);
-      setIsRunning(false);
-      return { stdout: "", stderr: "Execution timed out or failed", status: "Error" };
+      attempts++;
+      await delay(1000);
     }
-  };
+    throw new Error("Execution timed out");
+  } catch (err) {
+    setConnectionErrorMessage(err instanceof Error ? err.message : "Poll failed");
+    setShowConnectionErrorDialog(true);
+    return { stdout: "", stderr: err instanceof Error ? err.message : "Unknown error", status: "Error", needsInput: false };
+  }
+};
+
+  // AFTER pollJudge0Result function, add this:
+const executeStep = async (inputsSoFar: string[], step: number, totalInputsNeeded: number) => {
+  const langId = languageIdMap[language];
+  const stdin = inputsSoFar.join("\n") + (inputsSoFar.length ? "\n" : "");
+  const token = await submitCodeToJudge0(code, langId, stdin);
+  if (!token) return null;
+  return await pollJudge0Result(token, step, totalInputsNeeded);
+};
 
   const handleRunCode = async () => {
-    if (!code.trim()) {
-      setError((prev) => [...prev, "Code cannot be empty"]);
-      return;
-    }
+  if (!code.trim()) {
+    setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: "", error: "Code cannot be empty", status: "Error", needsInput: false }]);
+    return;
+  }
+  if (!languageIdMap[language]) {
+    setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: "", error: `Unsupported language: ${language}`, status: "Error", needsInput: false }]);
+    return;
+  }
 
-    if (!languageIdMap[language]) {
-      setError((prev) => [...prev, "Unsupported language"]);
-      return;
-    }
+  const inputsNeeded = analyzeInputsNeeded(code, language);
+  setTotalInputsNeeded(inputsNeeded);
+  setExecutionSteps([]);
+  setCurrentStep(0);
+  setPrompts([]);
+  setIsRunning(true);
 
-    setIsRunning(true);
-    setOutput([]);
-    setError([]);
-
-    const langId = languageIdMap[language];
-    const token = await submitCodeToJudge0(code, langId);
-    if (!token) return;
-
-    const result = await pollJudge0Result(token);
-    if (result.stdout) setOutput(result.stdout.split("\n").filter((line) => line));
-    if (result.stderr) setError((prev) => [...prev, result.stderr]);
+  const result = await executeStep([], 0, inputsNeeded);
+  if (result) {
+    const step: ExecutionStep = { id: 0, inputsSoFar: [], output: result.stdout, error: result.stderr, status: result.status, needsInput: result.needsInput };
+    setExecutionSteps([step]);
+    setCurrentStep(1);
     setIsRunning(false);
-  };
+  } else {
+    setIsRunning(false);
+  }
+};
+
+// Add after handleRunCode
+const handleInputSubmit = async () => {
+  if (!userInput.trim()) return;
+  const currentInputs = executionSteps[executionSteps.length - 1]?.inputsSoFar || [];
+  const newInputs = [...currentInputs, userInput];
+  setIsRunning(true);
+
+  const result = await executeStep(newInputs, currentStep, totalInputsNeeded);
+  if (result) {
+    const step: ExecutionStep = { id: currentStep, inputsSoFar: newInputs, output: result.stdout, error: result.stderr, status: result.status, needsInput: result.needsInput };
+    setExecutionSteps((prev) => [...prev, step]);
+    setCurrentStep(currentStep + 1);
+    setUserInput("");
+    setIsRunning(false);
+  } else {
+    setExecutionSteps((prev) => [...prev, { id: currentStep, inputsSoFar: newInputs, output: "", error: "[Error] Failed to process inputs", status: "Error", needsInput: false }]);
+    setCurrentStep(currentStep + 1);
+    setUserInput("");
+    setIsRunning(false);
+  }
+};
 
   useEffect(() => {
     const initialize = async () => {
@@ -534,33 +625,51 @@ export default function SubmissionViewPage() {
                         ref={editorRef}
                         readOnly={isRunning}
                       />
-                      <Button
-                        onClick={handleRunCode}
-                        disabled={isRunning || !code.trim() || !languageIdMap[language]}
-                        className="mt-4 w-full bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
-                      >
-                        {isRunning ? "Running..." : "Run Code"}
-                      </Button>
+                     <Button
+  onClick={handleRunCode}
+  disabled={isRunning || !code.trim() || !languageIdMap[language]}
+  className="mt-4 w-full bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
+>
+  {isRunning ? "Running..." : "Run"}
+</Button>
                     </div>
                     <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
-                      <h3 className="text-lg font-semibold text-teal-400 mb-2">Output</h3>
-                      <div
-                        className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto"
-                        style={{ width: "100%", height: "350px", whiteSpace: "pre-wrap" }}
-                      >
-                        {output.length === 0 && error.length === 0 && (
-                          <pre className="text-teal-300">Run the code to see the output.</pre>
-                        )}
-                        {output.map((line, index) => (
-                          <div key={`output-${index}`} className="flex items-center text-teal-300">
-                            <span>{line}</span>
-                          </div>
-                        ))}
-                        {error.map((line, index) => (
-                          <div key={`error-${index}`} className="text-red-400">{line}</div>
-                        ))}
-                      </div>
-                    </div>
+  <h3 className="text-lg font-semibold text-teal-400 mb-2">Console Output</h3>
+  <div className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto font-mono text-sm" style={{ width: "100%", height: "350px" }}>
+    {executionSteps.length === 0 && <span className="text-gray-500">Run code to see output...</span>}
+    {executionSteps.map((step) => (
+      <div key={step.id} className="mb-3">
+        {step.output && <div className="text-green-400">{step.output}</div>}
+        {step.inputsSoFar.map((input, i) => (
+          <div key={i} className="text-blue-400">&gt; {input}</div>
+        ))}
+        {step.error && <div className="text-red-400">{step.error}</div>}
+      </div>
+    ))}
+    {isRunning && <div className="text-yellow-400">[Executing...]</div>}
+  </div>
+  {isWaitingForInput && (
+    <div className="flex gap-2 mt-2">
+      <input
+        type="text"
+        value={userInput}
+        onChange={(e) => setUserInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && userInput.trim()) {
+            e.preventDefault();
+            handleInputSubmit();
+          }
+        }}
+        placeholder={`Input ${currentStep}/${totalInputsNeeded}`}
+        className="flex-1 p-2 bg-gray-700 text-white rounded border border-gray-600 focus:ring-2 focus:ring-teal-500"
+        disabled={isRunning}
+      />
+      <Button onClick={handleInputSubmit} disabled={isRunning || !userInput.trim()} size="sm">
+        Submit
+      </Button>
+    </div>
+  )}
+</div>
                   </div>
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Detector</h3>
