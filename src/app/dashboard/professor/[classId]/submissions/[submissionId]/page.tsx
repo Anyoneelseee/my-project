@@ -114,6 +114,8 @@ const analyzeInputsNeeded = (code: string, language: string): number => {
   return inputCount || 1;
 };
 
+
+
   const supportedLanguages = Object.keys(languageIdMap);
 
   const detectLanguageFromFileName = (fileName: string): string => {
@@ -670,16 +672,21 @@ const handleInputSubmit = async () => {
     </div>
   )}
 </div>
+
                   </div>
+                  
                   <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
                     <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Detector</h3>
                     <div className="flex items-center justify-center h-[100px] text-teal-300">
                       {aiError ? (
                         <p className="text-red-400">{aiError}</p>
                       ) : aiPercentage !== null ? (
-                        <p className="text-md font-semibold text-teal-400">
-                          AI-Generated Percentage: {aiPercentage.toFixed(2)}%
-                        </p>
+                        <p className="text-md font-semibold">
+  <span className="text-teal-400">AI: {aiPercentage.toFixed(2)}%</span>{" "}
+  <span className={aiPercentage > 50 ? "text-red-400" : "text-green-400"}>
+    → {aiPercentage > 50 ? "Likely AI-generated" : "Likely human-written"}
+  </span>
+</p>
                       ) : (
                         <p>Loading AI detection...</p>
                       )}
