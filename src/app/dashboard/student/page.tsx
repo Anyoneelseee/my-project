@@ -10,7 +10,6 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
@@ -318,11 +317,7 @@ export default function StudentDashboard() {
                   theme === "light" ? "text-slate-400" : "text-gray-400"
                 }`} />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className={`${
-                    theme === "light" ? "text-slate-700" : "text-gray-200"
-                  }`}>
-                    Home
-                  </BreadcrumbPage>
+                
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>

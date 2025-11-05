@@ -149,7 +149,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className={`min-h-screen ${theme === "light" ? "bg-slate-100" : "bg-gradient-to-br from-slate-900 to-gray-800"} font-['Poppins'] p-6 sm:p-8`}>
+    <div className={`min-h-screen ${theme === "light" ? "bg-slate-100" : "bg-gradient-to-br from-slate-900 to-gray-800"} font-sans p-6 sm:p-8`}>
       {/* Header */}
       <header className="sticky top-0 z-20 bg-opacity-90 backdrop-blur-lg mb-8">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
@@ -193,7 +193,7 @@ export default function SettingsPage() {
       >
         <Card className={`${theme === "light" ? "bg-white" : "bg-slate-800/90"} shadow-lg border border-teal-500/20 rounded-2xl overflow-hidden`}>
           <CardHeader className="p-8 bg-gradient-to-r from-teal-500/10 to-transparent">
-            <CardTitle className={`${theme === "light" ? "text-slate-900" : "text-slate-100"} text-3xl font-bold tracking-tight font-['Poppins']`}>
+            <CardTitle className={`${theme === "light" ? "text-slate-900" : "text-slate-100"} text-3xl font-bold tracking-tight font-sans`}>
               Settings
             </CardTitle>
             <CardDescription className={`${theme === "light" ? "text-slate-600" : "text-slate-400"} text-base font-medium`}>
@@ -270,7 +270,7 @@ export default function SettingsPage() {
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className={`${theme === "light" ? "bg-white" : "bg-slate-800/90"} border-teal-500/20 rounded-2xl max-w-lg`}>
           <DialogHeader className="p-6">
-            <DialogTitle className={`${theme === "light" ? "text-slate-900" : "text-teal-400"} text-xl font-bold font-['Poppins']`}>Delete Account</DialogTitle>
+            <DialogTitle className={`${theme === "light" ? "text-slate-900" : "text-teal-400"} text-xl font-bold font-sans`}>Delete Account</DialogTitle>
             <DialogDescription className={`${theme === "light" ? "text-slate-600" : "text-slate-400"} text-base font-medium`}>
               Are you sure you want to delete your account? This action is irreversible.
             </DialogDescription>

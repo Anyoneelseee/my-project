@@ -38,7 +38,7 @@ export default function ClassCard({ classData }: ClassCardProps) {
       <Card
         className={`${
           theme === "light" ? "bg-gradient-to-br from-slate-100 to-gray-200" : "bg-gradient-to-br from-slate-900 to-slate-800"
-        } shadow-lg border border-teal-500/20 rounded-2xl min-h-[220px] flex flex-col justify-between overflow-hidden cursor-pointer hover:shadow-2xl transition-all duration-300 font-['Poppins']`}
+        } shadow-lg border border-teal-500/20 rounded-2xl min-h-[220px] flex flex-col justify-between overflow-hidden cursor-pointer hover:shadow-2xl transition-all duration-300 font-sans`}
         aria-label={`View details for ${classData.name}`}
       >
         <CardHeader className="p-4 bg-gradient-to-r from-teal-400/10 to-transparent">

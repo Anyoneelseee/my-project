@@ -1,4 +1,3 @@
-// src/app/signup/page.tsx
 "use client";
 
 import React, { useState, FormEvent, useEffect, useRef } from "react";
@@ -8,15 +7,22 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
 
-// Define Particle interface
+// Particle interface
 interface Particle {
-  draw(): unknown;
-  update(): unknown;
+  draw(): void;
+  update(): void;
   x: number;
   y: number;
   size: number;
@@ -98,12 +104,11 @@ const ParticleBackground = () => {
     }
 
     const animate = () => {
-      if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let i = 0; i < particlesArray.length; i++) {
-        particlesArray[i].update();
-        particlesArray[i].draw();
-      }
+      particlesArray.forEach((p) => {
+        p.update();
+        p.draw();
+      });
       requestAnimationFrame(animate);
     };
     animate();
@@ -136,10 +141,6 @@ export default function SignupFormDemo() {
   const [showDialog, setShowDialog] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    console.log("Role state updated:", role);
-  }, [role]);
-
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -156,16 +157,11 @@ export default function SignupFormDemo() {
     }
 
     setLoading(true);
-
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          role: role,
-        },
+        data: { first_name: firstName, last_name: lastName, role },
       },
     });
 
@@ -181,177 +177,163 @@ export default function SignupFormDemo() {
       return;
     }
 
-    console.log("Role before signup:", role);
-    console.log("User metadata sent:", { first_name: firstName, last_name: lastName, role });
-
     setShowDialog(true);
     setLoading(false);
   };
 
   return (
-    <div className="min-h-svh relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+    <div className="min-h-svh relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white font-sans">
       <ParticleBackground />
-      <main className="flex items-center justify-center min-h-[calc(100vh-80px)] z-10 relative px-2 md:px-4">
-        <div className="bg-gray-800/90 backdrop-blur-md p-6 md:p-10 rounded-xl shadow-xl border border-teal-500/20 w-full max-w-lg">
-          {/* Logo and Link at the Top */}
-          <Link href="/" className="flex items-center gap-3 font-bold text-2xl md:text-3xl text-teal-400 mb-3 md:mb-6">
+
+      <main className="flex items-center justify-center min-h-screen z-10 relative px-4 sm:px-6">
+        <div className="bg-gray-800/90 backdrop-blur-md p-6 sm:p-8 md:p-10 rounded-xl shadow-xl border border-teal-500/20 w-full max-w-lg">
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-3 font-bold text-2xl text-teal-400 mb-6">
             <Image src="/carmalogo.png" alt="Carma Logo" width={40} height={40} className="rounded-full" />
-            Carma
+            CARMA
           </Link>
-          <h2 className="text-4xl font-extrabold text-center text-teal-400 mb-4 md:mb-8">Create Account</h2>
-          <p className="text-gray-400 text-center mb-4 md:mb-8 text-sm md:text-base">Join Carma and start your journey with advanced AI tools.</p>
-          <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSubmit}>
+
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-center text-teal-400 mb-2">
+            Create Account
+          </h2>
+          <p className="text-gray-400 text-center mb-8 text-sm sm:text-base">
+            Join CARMA and start your journey with advanced AI tools.
+          </p>
+
+          {/* Signup Form */}
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <LabelInputContainer>
-              <Label htmlFor="firstname" className="text-base text-gray-300">First Name</Label>
+              <Label htmlFor="firstname">First Name</Label>
               <Input
                 id="firstname"
                 placeholder="Tyler"
-                type="text"
                 value={firstName}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFirstName(e.target.value)}
+                onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setFirstName(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
             </LabelInputContainer>
+
             <LabelInputContainer>
-              <Label htmlFor="lastname" className="text-base text-gray-300">Last Name</Label>
+              <Label htmlFor="lastname">Last Name</Label>
               <Input
                 id="lastname"
                 placeholder="Durden"
-                type="text"
                 value={lastName}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLastName(e.target.value)}
+                onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setLastName(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
             </LabelInputContainer>
+
             <LabelInputContainer>
-              <Label htmlFor="email" className="text-base text-gray-300">Email Address</Label>
+              <Label htmlFor="email">Email Address</Label>
               <Input
                 id="email"
-                placeholder="projectmayhem@fc.com"
+                placeholder="you@example.com"
                 type="email"
                 value={email}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setEmail(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
             </LabelInputContainer>
+
             <LabelInputContainer>
-              <Label htmlFor="password" className="text-base text-gray-300">Password</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 placeholder="••••••••"
                 type="password"
                 value={password}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setPassword(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
             </LabelInputContainer>
+
             <LabelInputContainer>
-              <Label htmlFor="confirm-password" className="text-base text-gray-300">Confirm Password</Label>
+              <Label htmlFor="confirm-password">Confirm Password</Label>
               <Input
                 id="confirm-password"
                 placeholder="••••••••"
                 type="password"
                 value={confirmPassword}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
+                onChange={(e: { target: { value: React.SetStateAction<string>; }; }) => setConfirmPassword(e.target.value)}
                 className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-teal-500 focus:ring-teal-500"
                 required
               />
             </LabelInputContainer>
+
             <LabelInputContainer>
-              <Label className="text-base text-gray-300">Select Role</Label>
-              <div className="flex justify-center space-x-6">
-                <div
-                  className={cn(
-                    "flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 shadow-md",
-                    role === "student" ? "bg-gradient-to-br from-teal-500 to-blue-600" : "bg-gray-700/50 hover:bg-gray-600/70"
-                  )}
-                  onClick={() => setRole("student")}
-                  role="radio"
-                  aria-checked={role === "student"}
-                  tabIndex={0}
-onKeyPress={(e: React.KeyboardEvent<HTMLDivElement>) => { 
-  if (e.key === "Enter" || e.key === " ") setRole("student"); 
-}}                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value="student"
-                    checked={role === "student"}
-                    onChange={() => {}}
-                    className="hidden"
-                    required
-                  />
-                  <span className="text-white text-base">Student</span>
-                </div>
-                <div
-                  className={cn(
-                    "flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 shadow-md",
-                    role === "professor" ? "bg-gradient-to-br from-teal-500 to-blue-600" : "bg-gray-700/50 hover:bg-gray-600/70"
-                  )}
-                  onClick={() => setRole("professor")}
-                  role="radio"
-                  aria-checked={role === "professor"}
-                  tabIndex={0}
-onKeyPress={(e: React.KeyboardEvent<HTMLDivElement>) => { 
-  if (e.key === "Enter" || e.key === " ") setRole("professor"); 
-}}                >
-                  <input
-                    type="radio"
-                    name="role"
-                    value="professor"
-                    checked={role === "professor"}
-                    onChange={() => {}}
-                    className="hidden"
-                    required
-                  />
-                  <span className="text-white text-base">Professor</span>
-                </div>
+              <Label>Select Role</Label>
+              <div className="flex justify-center gap-4">
+                {["student", "professor"].map((r) => (
+                  <div
+                    key={r}
+                    className={cn(
+                      "flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-all duration-200 shadow-md",
+                      role === r
+                        ? "bg-gradient-to-br from-teal-500 to-blue-600"
+                        : "bg-gray-700/50 hover:bg-gray-600/70"
+                    )}
+                    onClick={() => setRole(r as "student" | "professor")}
+                    role="radio"
+                    aria-checked={role === r}
+                    tabIndex={0}
+                  >
+                    <input type="radio" name="role" value={r} checked={role === r} readOnly className="hidden" />
+                    <span className="text-white capitalize">{r}</span>
+                  </div>
+                ))}
               </div>
             </LabelInputContainer>
 
-            {error && <p className="text-red-400 text-sm text-center col-span-2 mb-4">{error}</p>}
-            {message && <p className="text-green-400 text-sm text-center col-span-2 mb-4">{message}</p>}
+            {error && <p className="text-red-400 text-sm text-center col-span-2">{error}</p>}
+            {message && <p className="text-green-400 text-sm text-center col-span-2">{message}</p>}
 
-            <button
-              className={cn(
-                "group/btn relative flex h-12 w-full col-span-2 items-center justify-center rounded-xl font-semibold text-white shadow-xl transition-all duration-200",
-                loading ? "bg-gray-600 cursor-not-allowed" : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"
-              )}
+            <Button
               type="submit"
               disabled={loading}
+              className={cn(
+                "col-span-2 h-12 font-semibold text-white rounded-xl shadow-xl transition-all duration-200",
+                loading
+                  ? "bg-gray-600 cursor-not-allowed"
+                  : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"
+              )}
             >
               {loading ? <Loader2 className="animate-spin h-5 w-5" /> : "Create Account →"}
-            </button>
+            </Button>
 
-            <div className="my-6 h-[1px] w-full col-span-2 bg-gradient-to-r from-transparent via-gray-600/30 to-transparent" />
+            <div className="col-span-2 h-px bg-gradient-to-r from-transparent via-gray-600/30 to-transparent my-4" />
+
             <div className="flex justify-center col-span-2">
-              <button
-                className="group/btn flex h-10 items-center justify-start space-x-2 rounded-xl bg-gray-700/50 px-4 font-medium text-white transition-all duration-200 hover:bg-gray-600 shadow-md"
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => router.push("/login")}
+                className="flex items-center gap-2 bg-gray-700/50 hover:bg-gray-600 text-white px-4 py-2 rounded-xl shadow-md transition-all duration-200"
               >
                 <ArrowLeft className="h-4 w-4 text-gray-300" />
                 <span className="text-sm">Back to Login</span>
-              </button>
+              </Button>
             </div>
           </form>
 
+          {/* Confirmation Dialog */}
           <Dialog open={showDialog} onOpenChange={setShowDialog}>
-            <DialogContent className="bg-gray-800/90 backdrop-blur-md border-teal-500/20 max-w-md mx-auto">
+            <DialogContent className="bg-gray-800/90 backdrop-blur-md border border-teal-500/20 max-w-md mx-auto">
               <DialogHeader>
                 <DialogTitle className="text-teal-400 text-2xl">Verify Your Email</DialogTitle>
                 <DialogDescription className="text-gray-300 text-sm">
-                  A confirmation email has been sent to <b className="text-white">{email}</b>. Please check your inbox and confirm your email before logging in.
+                  A confirmation email has been sent to{" "}
+                  <b className="text-white">{email}</b>. Please check your inbox to confirm your email.
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button
-                  className="bg-teal-500 hover:bg-teal-600 text-white text-base px-6 py-2 rounded-lg"
                   onClick={() => router.push("/login")}
+                  className="bg-teal-500 hover:bg-teal-600 text-white text-base px-6 py-2 rounded-lg"
                 >
                   Go to Login
                 </Button>
@@ -360,19 +342,16 @@ onKeyPress={(e: React.KeyboardEvent<HTMLDivElement>) => {
           </Dialog>
         </div>
       </main>
-      <style jsx global>{`
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        .pulse { animation: pulse 2s infinite; }
-        .bg-gradient-to-br { background: linear-gradient(135deg, #1a202c, #2a4365, #1a202c); }
-        .border-teal-500\/20 { border-color: rgba(20, 184, 166, 0.2); }
-        .hover\:bg-teal-600:hover { background-color: #0d9488; }
-        .shadow-xl { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
-        .focus\:ring-teal-500:focus { box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.4); }
-      `}</style>
     </div>
   );
 }
 
-const LabelInputContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => {
-  return <div className={cn("flex flex-col space-y-2 w-full", className)}>{children}</div>;
-};
+const LabelInputContainer = ({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => (
+  <div className={cn("flex flex-col space-y-2 w-full", className)}>{children}</div>
+);

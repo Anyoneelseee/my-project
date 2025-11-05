@@ -9,7 +9,7 @@ import LoginForm from "@/components/login-form";
 import Image from "next/image";
 import Link from "next/link";
 
-// Define Particle interface
+// Particle Interface & Background Component
 interface Particle {
   draw(): unknown;
   update(): unknown;
@@ -20,7 +20,6 @@ interface Particle {
   speedY: number;
 }
 
-// Particle Background Component
 const ParticleBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -28,7 +27,6 @@ const ParticleBackground = () => {
     const canvas = canvasRef.current!;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -49,7 +47,6 @@ const ParticleBackground = () => {
       size: number;
       speedX: number;
       speedY: number;
-
       constructor() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
@@ -57,7 +54,6 @@ const ParticleBackground = () => {
         this.speedX = Math.random() * 2 - 1;
         this.speedY = Math.random() * 2 - 1;
       }
-
       update() {
         const dx = this.x - mouseX;
         const dy = this.y - mouseY;
@@ -68,7 +64,6 @@ const ParticleBackground = () => {
           this.x += (dx / distance) * force * 3;
           this.y += (dy / distance) * force * 3;
         }
-
         this.x += this.speedX;
         this.y += this.speedY;
         if (this.x > canvas.width) this.x = 0;
@@ -76,12 +71,11 @@ const ParticleBackground = () => {
         if (this.y > canvas.height) this.y = 0;
         if (this.y < 0) this.y = canvas.height;
       }
-
       draw() {
         if (!ctx) return;
         const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size);
-        gradient.addColorStop(0, "#40C4FF"); // Teal-blue accent
-        gradient.addColorStop(1, "#00ADB5"); // Darker teal
+        gradient.addColorStop(0, "#40C4FF");
+        gradient.addColorStop(1, "#00ADB5");
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -131,57 +125,46 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Sign in
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
-        console.error("Login error:", signInError.message);
-        if (signInError.message === "Email not confirmed") {
-          setError("Please confirm your email address before logging in. Check your inbox for the confirmation link.");
-        } else {
-          setError(signInError.message);
-        }
+        setError(
+          signInError.message === "Email not confirmed"
+            ? "Please confirm your email address before logging in. Check your inbox for the confirmation link."
+            : signInError.message
+        );
         setLoading(false);
         return;
       }
 
       if (!data.session) {
-        console.error("No session returned after login");
         setError("Login failed. Please try again.");
         setLoading(false);
         return;
       }
 
-      // Verify session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
-        console.error("Session verification failed:", sessionError?.message);
         setError("Session verification failed. Please try again.");
         setLoading(false);
         return;
       }
 
-      // Get user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error("Error fetching user:", userError?.message);
         setError("Failed to verify user. Please try again.");
         setLoading(false);
         return;
       }
 
-      // Fetch role
       const role = await getUserRole();
       if (role) {
         router.push(`/dashboard/${role}`);
       } else {
-        setError("Role not found. Please contact support to resolve this issue.");
-        console.error("Role not found for user:", user.id);
-        // Optionally redirect to an error page
-        // router.push("/error");
+        setError("Role not found. Please contact support.");
       }
     } catch (err) {
       console.error("Unexpected login error:", err);
@@ -191,27 +174,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-svh relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white font-sans">
       {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Main Content with Two-Column Layout */}
-      <main className="flex items-center justify-center h-screen z-10 relative px-2 md:px-4 mt-0">
-        <div className="flex flex-col md:flex-row w-full max-w-5xl gap-2 md:gap-4">
-          {/* Left Login Form */}
-          <div className="w-full md:w-1/2 bg-gray-800/90 backdrop-blur-md p-3 md:p-4 rounded-lg shadow-lg border border-teal-500/20 flex flex-col items-center max-h-[100vh] min-h-0 flex-grow">
-            {/* Logo and Link at the Top */}
-            <Link href="/" className="flex items-center gap-1 font-bold text-xl md:text-2xl text-teal-400 mb-0.5 md:mb-1">
-              <Image
-                src="/carmalogo.png"
-                alt="Carma Logo"
-                width={35}
-                height={35}
-                className="rounded-full"
-              />
+      {/* Main Layout */}
+      <main className="flex items-center justify-center h-screen relative z-10 px-4">
+        <div className="flex flex-col md:flex-row w-full max-w-5xl rounded-2xl overflow-hidden shadow-xl border border-teal-500/20 backdrop-blur-md">
+          
+          {/* Left: Login Form */}
+          <div className="w-full md:w-1/2 bg-gray-800/90 p-8 flex flex-col items-center justify-center">
+            <Link
+              href="/"
+              className="flex items-center gap-2 font-bold text-2xl text-teal-400 mb-6"
+            >
+              <Image src="/carmalogo.png" alt="Carma Logo" width={40} height={40} className="rounded-full" />
               CARMA
             </Link>
-      
+
             <LoginForm
               email={email}
               setEmail={setEmail}
@@ -220,60 +200,36 @@ export default function LoginPage() {
               handleSubmit={handleSubmit}
               error={error}
             />
-            {/* Styled Sign-Up Link */}
-            <div className="mt-0.5 md:mt-1 text-center">
-              <p className="text-gray-500 text-xs md:text-sm">
-                Don’t have an account?{" "}
-                <Link href="/signup" className="text-teal-400 hover:text-teal-300 underline transition-colors duration-200">
-                  Sign up
-                </Link>
-              </p>
-            </div>
+
+            <p className="mt-6 text-sm text-gray-400">
+              Don’t have an account?{" "}
+              <Link
+                href="/signup"
+                className="text-teal-400 hover:text-teal-300 underline transition-colors"
+              >
+                Sign up
+              </Link>
+            </p>
           </div>
 
-          {/* Right Design Card */}
-          <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 rounded-lg p-3 md:p-4 shadow-lg flex flex-col items-center justify-center text-center text-white relative overflow-hidden max-h-[100vh] min-h-0 flex-grow">
-            <div className="absolute inset-0 bg-black/20 rounded-lg"></div> {/* Subtle overlay */}
+          {/* Right: Illustration */}
+          <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 flex flex-col items-center justify-center p-8 text-center relative">
+            <div className="absolute inset-0 bg-black/20" />
             <Image
               src="/illustration_login.png"
               alt="Welcome Illustration"
-              width={120}
-              height={120}
-              className="mb-0.5 md:mb-1 rounded-lg shadow-lg z-10"
+              width={180}
+              height={180}
+              className="mb-6 z-10"
             />
-            <h2 className="text-xl md:text-2xl font-bold mb-0.5 md:mb-1 z-10">Welcome to Carma</h2>
-            <p className="text-xs md:text-sm text-teal-100 mb-0.5 md:mb-1 z-10">
-              Discover Carma, where you can check AI-generated code content, manage courses,
-              and collaborate with peers using our tools. Log in to streamline 
-              your educational workflow with ease.
+            <h2 className="text-2xl font-bold mb-3 z-10">Welcome to CARMA</h2>
+            <p className="text-sm text-teal-100 max-w-sm z-10">
+              Discover CARMA, your intelligent workspace for managing courses,
+              checking AI-generated content, and collaborating with ease.
             </p>
           </div>
         </div>
       </main>
-
-      {/* Custom Styles */}
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-          100% { transform: scale(1); }
-        }
-        .pulse {
-          animation: pulse 2s infinite;
-        }
-        .bg-gradient-to-br {
-          background: linear-gradient(135deg, #1a202c, #2a4365, #1a202c);
-        }
-        .border-teal-500\/20 {
-          border-color: rgba(20, 184, 166, 0.2);
-        }
-        .hover\:text-teal-300:hover {
-          color: #5eead4;
-        }
-        .shadow-lg {
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-      `}</style>
     </div>
   );
 }

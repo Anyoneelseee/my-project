@@ -65,9 +65,6 @@ onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
         <div className="grid gap-3">
           <div className="flex items-center">
             <Label htmlFor="password">Password</Label>
-            <a href="/forgot-password" className="ml-auto text-sm underline-offset-4 hover:underline">
-              Forgot your password?
-            </a>
           </div>
           <Input 
             id="password" 
@@ -77,6 +74,9 @@ onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
           />
         </div>
+          <a href="/forgot-password" className="-mt-5 ml-auto text-sm underline-offset-4 hover:underline">
+              Forgot your password?
+            </a>
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
         
         <Button type="submit" className="w-full" disabled={isLoading}>

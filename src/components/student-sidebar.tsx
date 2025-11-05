@@ -3,12 +3,7 @@
 
 import * as React from "react";
 import { useState, useEffect, useMemo } from "react";
-import {
-  Command,
-  SquareTerminal,
-  Users,
-  Upload,
-} from "lucide-react";
+import { Command, SquareTerminal, Users, Upload } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
 import { StudentNavUser } from "@/components/StudentNavUser";
@@ -19,11 +14,6 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
 
 interface Class {
   id: string;
@@ -47,17 +37,21 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        const {
+          data: { user: authUser },
+          error,
+        } = await supabase.auth.getUser();
         if (error || !authUser) {
           console.error("Failed to fetch user:", error?.message);
           return;
         }
-        console.log("Auth user:", authUser);
-        const { data: userData, error: userError } = await supabase
-          .rpc("get_user_profile", { user_id_input: authUser.id });
-        console.log("User profile data:", userData, "Error:", userError);
+
+        const { data: userData, error: userError } = await supabase.rpc(
+          "get_user_profile",
+          { user_id_input: authUser.id }
+        );
+
         if (userError || !userData || userData.length === 0) {
-          console.warn("Failed to fetch user details:", userError?.message || "No user data found");
           setUser({
             name: authUser.email?.split("@")[0] || "Student",
             email: authUser.email || "student@example.com",
@@ -65,11 +59,13 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
           });
           return;
         }
+
         const userProfile = userData[0];
         setUser({
-          name: userProfile.first_name && userProfile.last_name
-            ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
-            : authUser.email?.split("@")[0] || "Student",
+          name:
+            userProfile.first_name && userProfile.last_name
+              ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
+              : authUser.email?.split("@")[0] || "Student",
           email: userProfile.email || authUser.email || "student@example.com",
           avatar: userProfile.avatar_url || "",
         });
@@ -103,12 +99,13 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
         title: "My Classes",
         url: "/dashboard/student/my-classes",
         icon: Users,
-        items: classes.length > 0
-          ? classes.map((cls) => ({
-              title: `${cls.name} (${cls.section})`,
-              url: `/dashboard/student/my-classes/${cls.id}`,
-            }))
-          : [{ title: "No classes joined yet", url: "#" }],
+        items:
+          classes.length > 0
+            ? classes.map((cls) => ({
+                title: `${cls.name} (${cls.section})`,
+                url: `/dashboard/student/my-classes/${cls.id}`,
+              }))
+            : [{ title: "No classes joined yet", url: "#" }],
       },
       {
         title: "Bulk AI Checker and Similarity",
@@ -121,17 +118,10 @@ export function StudentSidebar({ classes = [], ...props }: StudentSidebarProps) 
   return (
     <Sidebar
       collapsible="icon"
-      className="bg-transparent [&[data-slot=sidebar-container]]:bg-gradient-to-br [&[data-slot=sidebar-container]]:from-gray-800 [&[data-slot=sidebar-container]]:to-gray-900 [&[data-slot=sidebar-container]]:border-r [&[data-slot=sidebar-container]]:border-teal-500/20 [&[data-slot=sidebar-inner]]:bg-gradient-to-br [&[data-slot=sidebar-inner]]:from-gray-800 [&[data-slot=sidebar-inner]]:to-gray-900"
+      className="font-sans bg-transparent [&[data-slot=sidebar-container]]:bg-gradient-to-br [&[data-slot=sidebar-container]]:from-gray-800 [&[data-slot=sidebar-container]]:to-gray-900 [&[data-slot=sidebar-container]]:border-r [&[data-slot=sidebar-container]]:border-teal-500/20 [&[data-slot=sidebar-inner]]:bg-gradient-to-br [&[data-slot=sidebar-inner]]:from-gray-800 [&[data-slot=sidebar-inner]]:to-gray-900"
       {...props}
     >
-      <SidebarHeader className="bg-transparent">
-        <Avatar className="h-12 w-12 rounded-xl bg-slate-700 ring-2 ring-teal-400/50">
-          <AvatarImage src={memoizedUser.avatar} alt={memoizedUser.name} />
-          <AvatarFallback className="rounded-xl text-slate-200 text-2xl font-semibold">
-            {memoizedUser.name.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      </SidebarHeader>
+      <SidebarHeader className="bg-transparent" />
       <SidebarContent className="bg-transparent">
         <NavMain items={data.navMain} />
       </SidebarContent>

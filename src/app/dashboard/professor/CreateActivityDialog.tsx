@@ -202,7 +202,7 @@ export function CreateActivityDialog({
             <Button
               id={`${label.toLowerCase()}-date`}
               variant="outline"
-              className="w-40 justify-between font-normal bg-gray-700/50 border-gray-600 text-gray-200 hover:border-teal-500 hover:ring-2 hover:ring-teal-500"
+              className="w-40 justify-between bg-gray-700/50 border-gray-600 text-gray-200 hover:border-teal-500 hover:ring-2 hover:ring-teal-500"
             >
               {date ? date.toLocaleDateString() : "Select date"}
               <ChevronDownIcon className="text-teal-400" />
@@ -225,7 +225,7 @@ export function CreateActivityDialog({
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="w-40 justify-between font-normal bg-gray-700/50 border-gray-600 text-gray-200 hover:border-teal-500 hover:ring-2 hover:ring-teal-500"
+              className="w-40 justify-between bg-gray-700/50 border-gray-600 text-gray-200 hover:border-teal-500 hover:ring-2 hover:ring-teal-500"
             >
               {`${tempTime.hours}:${tempTime.minutes} ${tempTime.period}`}
               <ChevronDownIcon className="text-teal-400" />

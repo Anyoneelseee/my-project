@@ -565,7 +565,7 @@ const handleInputSubmit = async () => {
                   href="/dashboard/professor"
                   className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
                 >
-                  Home
+                  Professor Dashboard
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
@@ -637,7 +637,7 @@ const handleInputSubmit = async () => {
                     </div>
                     <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
   <h3 className="text-lg font-semibold text-teal-400 mb-2">Console Output</h3>
-  <div className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto font-mono text-sm" style={{ width: "100%", height: "350px" }}>
+  <div className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto text-sm" style={{ width: "100%", height: "350px" }}>
     {executionSteps.length === 0 && <span className="text-gray-500">Run code to see output...</span>}
     {executionSteps.map((step) => (
       <div key={step.id} className="mb-3">

@@ -46,7 +46,7 @@ export function ClassCard({ classData }: ClassCardProps) {
       <Card
         className={`${
           theme === "light" ? "bg-white" : "bg-slate-800/90"
-        } shadow-lg border border-teal-500/20 rounded-2xl min-h-[200px] flex flex-col justify-between overflow-hidden cursor-pointer hover:shadow-xl transition-shadow duration-300 font-['Poppins']`}
+        } shadow-lg border border-teal-500/20 rounded-2xl min-h-[200px] flex flex-col justify-between overflow-hidden cursor-pointer hover:shadow-xl transition-shadow duration-300`}
         onClick={handleCardClick}
         aria-label={`View details for ${classData.name}`}
       >

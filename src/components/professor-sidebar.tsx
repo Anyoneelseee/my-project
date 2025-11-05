@@ -1,3 +1,4 @@
+// File: src/components/ProfessorSidebar.tsx
 "use client";
 
 import * as React from "react";
@@ -19,11 +20,6 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
 
 interface Class {
   id: string;
@@ -47,15 +43,26 @@ export function ProfessorSidebar({
     console.log("ProfessorSidebar classes:", classes);
     const fetchUser = async () => {
       try {
-        const { data: { user: authUser }, error } = await supabase.auth.getUser();
+        const {
+          data: { user: authUser },
+          error,
+        } = await supabase.auth.getUser();
+
         if (error || !authUser) {
           console.error("Failed to fetch user:", error?.message);
           return;
         }
-        const { data: userData, error: userError } = await supabase
-          .rpc("get_user_profile", { user_id_input: authUser.id });
+
+        const { data: userData, error: userError } = await supabase.rpc(
+          "get_user_profile",
+          { user_id_input: authUser.id }
+        );
+
         if (userError || !userData || userData.length === 0) {
-          console.warn("Failed to fetch user details:", userError?.message || "No user data found");
+          console.warn(
+            "Failed to fetch user details:",
+            userError?.message || "No user data found"
+          );
           setUser({
             name: authUser.email?.split("@")[0] || "Professor",
             email: authUser.email || "professor@example.com",
@@ -63,11 +70,13 @@ export function ProfessorSidebar({
           });
           return;
         }
+
         const userProfile = userData[0];
         setUser({
-          name: userProfile.first_name && userProfile.last_name
-            ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
-            : authUser.email?.split("@")[0] || "Professor",
+          name:
+            userProfile.first_name && userProfile.last_name
+              ? `${userProfile.first_name} ${userProfile.last_name}`.trim()
+              : authUser.email?.split("@")[0] || "Professor",
           email: userProfile.email || "professor@example.com",
           avatar: userProfile.avatar_url || "",
         });
@@ -92,28 +101,34 @@ export function ProfessorSidebar({
         title: "Created Classes",
         url: "/dashboard/professor",
         icon: PlusCircle,
-        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
-          title: `${cls.name} (${cls.section})`,
-          url: `/dashboard/professor/${cls.id}`,
-        })),
+        items: classes
+          .filter((cls) => cls && cls.id && cls.name && cls.section)
+          .map((cls) => ({
+            title: `${cls.name} (${cls.section})`,
+            url: `/dashboard/professor/${cls.id}`,
+          })),
       },
       {
         title: "Monitoring",
         url: "/dashboard/professor/monitoring",
         icon: BarChart2,
-        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
-          title: `${cls.name} (${cls.section})`,
-          url: `/dashboard/professor/monitoring/${cls.id}`,
-        })),
+        items: classes
+          .filter((cls) => cls && cls.id && cls.name && cls.section)
+          .map((cls) => ({
+            title: `${cls.name} (${cls.section})`,
+            url: `/dashboard/professor/monitoring/${cls.id}`,
+          })),
       },
       {
         title: "Analytics",
         url: "/dashboard/professor/analytics",
         icon: LineChart,
-        items: classes.filter(cls => cls && cls.id && cls.name && cls.section).map((cls) => ({
-          title: `${cls.name} (${cls.section})`,
-          url: `/dashboard/professor/analytics/${cls.id}`,
-        })),
+        items: classes
+          .filter((cls) => cls && cls.id && cls.name && cls.section)
+          .map((cls) => ({
+            title: `${cls.name} (${cls.section})`,
+            url: `/dashboard/professor/analytics/${cls.id}`,
+          })),
       },
       {
         title: "Bulk AI Checker and Similarity",
@@ -124,22 +139,19 @@ export function ProfessorSidebar({
   };
 
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <Avatar className="h-12 w-12 rounded-xl bg-slate-700 ring-2 ring-teal-400/50">
-          <AvatarImage src={user.avatar} alt={user.name} />
-          <AvatarFallback className="rounded-xl text-slate-200 text-2xl font-semibold">
-            {user.name.charAt(0).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      </SidebarHeader>
-      <SidebarContent>
+    <Sidebar
+      collapsible="icon"
+      className="font-sans bg-transparent [&[data-slot=sidebar-container]]:bg-gradient-to-br [&[data-slot=sidebar-container]]:from-gray-800 [&[data-slot=sidebar-container]]:to-gray-900 [&[data-slot=sidebar-container]]:border-r [&[data-slot=sidebar-container]]:border-teal-500/20 [&[data-slot=sidebar-inner]]:bg-gradient-to-br [&[data-slot=sidebar-inner]]:from-gray-800 [&[data-slot=sidebar-inner]]:to-gray-900"
+      {...props}
+    >
+      <SidebarHeader className="bg-transparent" />
+      <SidebarContent className="bg-transparent">
         <NavMain items={data.navMain} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="bg-transparent">
         <NavUser user={data.user} />
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail className="bg-transparent hover:bg-teal-500/20" />
     </Sidebar>
   );
 }

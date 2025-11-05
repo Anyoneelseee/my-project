@@ -541,7 +541,7 @@ export default function CodeEditorSection({
           <div className="p-3 bg-gray-800/50 border-b border-gray-700">
             <h3 className="font-semibold text-teal-400">Console Output</h3>
           </div>
-          <div className="flex-1 p-3 bg-gray-900 overflow-y-auto font-mono text-sm">
+          <div className="flex-1 p-3 bg-gray-900 overflow-y-auto text-sm">
             {executionSteps.length === 0 && <span className="text-gray-500">Run code to see output...</span>}
             {executionSteps.map((step) => (
               <div key={step.id} className="mb-3">

@@ -230,8 +230,8 @@ export default function ProfessorDashboard() {
             <Breadcrumb>
               <BreadcrumbList className="text-sm">
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-teal-400 font-medium">
-                    Home
+                  <BreadcrumbPage className="text-teal-400 font-medium font-sans">
+                    Professor Dashboard
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

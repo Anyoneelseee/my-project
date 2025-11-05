@@ -374,6 +374,8 @@ export function NavUser({
 
   return (
     <>
+        <div className="font-sans">
+
       <SidebarMenu className="bg-transparent">
         <SidebarMenuItem className="bg-transparent">
           <DropdownMenu>
@@ -396,7 +398,7 @@ export function NavUser({
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20"
+              className="font-sans w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20"
               side={isMobile ? "bottom" : "right"}
               align="end"
               sideOffset={4}
@@ -568,6 +570,7 @@ export function NavUser({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+       </div>
     </>
   );
 }

@@ -134,7 +134,7 @@ export default function CodeEditorCore({
 
       {/* Console */}
       <div className="flex flex-col h-full">
-        <div className="flex-1 p-3 bg-gray-900/50 rounded-lg border border-gray-600 overflow-y-auto font-mono text-sm">
+        <div className="flex-1 p-3 bg-gray-900/50 rounded-lg border border-gray-600 overflow-y-auto text-sm">
           {steps.length === 0 && <span className="text-gray-400">Run code to see output…</span>}
           {steps.map((s, i) => (
             <div key={i}>

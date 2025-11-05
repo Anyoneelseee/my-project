@@ -322,7 +322,7 @@ export default function BulkAICheckerPage() {
                   href="/dashboard/professor"
                   className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
                 >
-                  Home
+                  Professor Dashboard
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />

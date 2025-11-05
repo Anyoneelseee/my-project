@@ -1,8 +1,8 @@
+// File: src/components/NavMain.tsx
 "use client";
 
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import Link from "next/link";
-
 import {
   Collapsible,
   CollapsibleContent,
@@ -33,21 +33,23 @@ export function NavMain({
     }[];
   }[];
 }) {
-  // Debug items
   console.log("NavMain items:", items);
 
-  // Handle empty or invalid items
   if (!items || !Array.isArray(items)) {
     return (
-      <SidebarGroup>
-        <SidebarGroupLabel className="text-gray-400">No navigation items</SidebarGroupLabel>
+      <SidebarGroup className="font-sans">
+        <SidebarGroupLabel className="text-gray-400">
+          No navigation items
+        </SidebarGroupLabel>
       </SidebarGroup>
     );
   }
 
   return (
-    <SidebarGroup className="bg-transparent">
-      <SidebarGroupLabel className="text-teal-400">Platform</SidebarGroupLabel>
+    <SidebarGroup className="bg-transparent font-sans">
+      <SidebarGroupLabel className="text-teal-400">
+        Platform
+      </SidebarGroupLabel>
       <SidebarMenu className="bg-transparent">
         {items.map((item) =>
           item && item.title && item.url ? (
@@ -77,8 +79,14 @@ export function NavMain({
                     <SidebarMenuSub className="bg-transparent">
                       {item.items.map((subItem) =>
                         subItem && subItem.title && subItem.url ? (
-                          <SidebarMenuSubItem key={subItem.title} className="bg-transparent">
-                            <SidebarMenuSubButton asChild className="bg-transparent text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                          <SidebarMenuSubItem
+                            key={subItem.title}
+                            className="bg-transparent"
+                          >
+                            <SidebarMenuSubButton
+                              asChild
+                              className="bg-transparent text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
+                            >
                               <Link
                                 href={subItem.url}
                                 className="bg-transparent text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
