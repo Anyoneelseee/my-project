@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { ArrowLeft, Edit, Save, X, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Edit, X, Sun, Moon } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   Card,
@@ -304,91 +304,110 @@ export default function ProfilePage() {
 
       {/* Edit Profile Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent
-          className={`${
-            theme === "light" ? "bg-white" : "bg-slate-800/90"
-          } border-teal-500/20 rounded-2xl max-w-lg font-sans`}
-        >
-          <DialogHeader className="p-6">
-            <DialogTitle
+  {isEditDialogOpen && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Overlay (dark + blur background) */}
+      <motion.div
+        className="fixed inset-0 bg-slate-900/80 backdrop-blur-lg"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.25 }}
+      />
+
+      {/* Dialog content */}
+      <DialogContent
+        className={`${
+          theme === "light" ? "bg-white/90" : "bg-slate-800/90"
+        } border-teal-500/20 rounded-2xl max-w-lg font-sans shadow-xl
+           backdrop-blur-xl z-50`}
+      >
+        <DialogHeader className="p-6">
+          <DialogTitle
+            className={`${
+              theme === "light" ? "text-slate-900" : "text-teal-400"
+            } text-xl font-bold`}
+          >
+            Edit Profile
+          </DialogTitle>
+          <DialogDescription
+            className={`${
+              theme === "light" ? "text-slate-600" : "text-slate-400"
+            } text-base font-medium`}
+          >
+            Update your profile information below.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Form fields */}
+        <div className="p-6 pt-0 grid gap-6">
+          <div className="grid gap-2">
+            <label
               className={`${
-                theme === "light" ? "text-slate-900" : "text-teal-400"
-              } text-xl font-bold`}
+                theme === "light" ? "text-slate-700" : "text-slate-100"
+              } text-sm font-semibold`}
+              htmlFor="first-name"
             >
-              Edit Profile
-            </DialogTitle>
-            <DialogDescription
-              className={`${
-                theme === "light" ? "text-slate-600" : "text-slate-400"
-              } text-base font-medium`}
-            >
-              Update your profile information below.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-6 pt-0 grid gap-6">
-            <div className="grid gap-2">
-              <label
-                className={`${
-                  theme === "light" ? "text-slate-700" : "text-slate-100"
-                } text-sm font-semibold`}
-                htmlFor="first-name"
-              >
-                First Name
-              </label>
+              First Name
+            </label>
             <Input
-  id="first-name"
-  value={editForm.first_name}
-  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-    setEditForm({ ...editForm, first_name: e.target.value })
-  }
-  className="bg-slate-800 border-slate-600 text-slate-100 rounded-xl h-10 text-base font-medium focus:ring-2 focus:ring-teal-400"
-/>
-            </div>
-            <div className="grid gap-2">
-              <label
-                className={`${
-                  theme === "light" ? "text-slate-700" : "text-slate-100"
-                } text-sm font-semibold`}
-                htmlFor="last-name"
-              >
-                Last Name
-              </label>
-            <Input
-  id="last-name"
-  value={editForm.last_name}
-  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-    setEditForm({ ...editForm, last_name: e.target.value })
-  }
-  className="bg-slate-800 border-slate-600 text-slate-100 rounded-xl h-10 text-base font-medium focus:ring-2 focus:ring-teal-400"
-/>
-            </div>
+              id="first-name"
+              value={editForm.first_name}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditForm({ ...editForm, first_name: e.target.value })
+              }
+              className="bg-slate-800 border-slate-600 text-slate-100 rounded-xl h-10 text-base font-medium focus:ring-2 focus:ring-teal-400"
+            />
           </div>
-          <DialogFooter className="p-6 pt-0 flex justify-end gap-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsEditDialogOpen(false)}
+
+          <div className="grid gap-2">
+            <label
               className={`${
-                theme === "light"
-                  ? "bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200"
-                  : "bg-slate-700/50 text-slate-100 border-slate-600 hover:bg-slate-600"
-              } rounded-full px-6 py-2 text-sm font-medium`}
+                theme === "light" ? "text-slate-700" : "text-slate-100"
+              } text-sm font-semibold`}
+              htmlFor="last-name"
             >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveProfile}
-              className={`${
-                theme === "light"
-                  ? "bg-teal-600 hover:bg-teal-700"
-                  : "bg-teal-500 hover:bg-teal-600"
-              } text-white rounded-full px-6 py-2 text-sm font-medium transition-transform hover:scale-105`}
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Last Name
+            </label>
+            <Input
+              id="last-name"
+              value={editForm.last_name}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditForm({ ...editForm, last_name: e.target.value })
+              }
+              className="bg-slate-800 border-slate-600 text-slate-100 rounded-xl h-10 text-base font-medium focus:ring-2 focus:ring-teal-400"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="p-6 pt-0 flex justify-end gap-4">
+          <Button
+            variant="outline"
+            onClick={() => setIsEditDialogOpen(false)}
+            className={`${
+              theme === "light"
+                ? "bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200"
+                : "bg-slate-700/50 text-slate-100 border-slate-600 hover:bg-slate-600"
+            } rounded-full px-6 py-2 text-sm font-medium`}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveProfile}
+            className={`${
+              theme === "light"
+                ? "bg-teal-600 hover:bg-teal-700"
+                : "bg-teal-500 hover:bg-teal-600"
+            } text-white rounded-full px-6 py-2 text-sm font-medium transition-transform hover:scale-105`}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </div>
+  )}
+</Dialog>
+
     </div>
   );
 }
