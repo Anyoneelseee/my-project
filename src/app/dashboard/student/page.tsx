@@ -282,7 +282,7 @@ export default function StudentDashboard() {
     return (
       <div className={`flex items-center justify-center min-h-screen ${
         theme === "light" ? "bg-slate-100" : "bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900"
-      } text-gray-200 font-sans`}>
+      } text-gray-200`}>
         <div className={`text-xl font-semibold ${
           theme === "light" ? "text-slate-700" : "text-gray-200"
         }`}>Loading...</div>
@@ -325,7 +325,7 @@ export default function StudentDashboard() {
         </header>
         <div className={`min-h-screen ${
           theme === "light" ? "bg-slate-100" : "bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900"
-        } text-gray-200 p-6 font-sans`}>
+        } text-gray-200 p-6`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Join a Class Card */}
             <Card className={`${

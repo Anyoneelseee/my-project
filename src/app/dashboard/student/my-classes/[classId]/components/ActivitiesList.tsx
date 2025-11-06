@@ -540,24 +540,32 @@ export default function ActivitiesList({
                   <div className="text-teal-200 text-base max-h-[50vh] overflow-y-auto">
                     {submissionFileName[activity.id]?.length > 0 ? (
                       <div className="flex flex-col gap-4">
-                        {submissionFileName[activity.id].map((name, i) => (
-                          <div key={i} className="border-b border-teal-500/30 pb-2">
-                            <p><span className="font-semibold">File {i + 1}:</span> {name}</p>
-                            <p>
-                              <span className="font-semibold">Professor Viewed:</span>{" "}
-                              {submissionIsViewed[activity.id][i] ? (
-                                <span className="text-teal-400 flex items-center">Yes <CheckCircle className="w-4 h-4 ml-1" /></span>
-                              ) : "No"}
-                            </p>
-                            <p>
-                              <span className="font-semibold">AI-Generated %:</span>{" "}
-                              {submissionAiPercentage[activity.id][i] !== null
-                                ? `${submissionAiPercentage[activity.id][i]?.toFixed(2)}%`
-                                : "Not analyzed"}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+  {submissionFileName[activity.id].map((name, i) => (
+    <div key={i} className="border-b border-teal-500/30 pb-2">
+      <p>
+        <span className="font-semibold">File {i + 1}:</span> {name}
+      </p>
+      <p className="flex items-center">
+        <span className="font-semibold">Professor Viewed:</span>{" "}
+        {submissionIsViewed[activity.id][i] ? (
+          <span className="text-teal-400 flex items-center ml-1">
+            Yes
+            <CheckCircle className="w-4 h-4 ml-1" />
+          </span>
+        ) : (
+          <span className="ml-1">No</span>
+        )}
+      </p>
+      <p>
+        <span className="font-semibold">AI-Generated %:</span>{" "}
+        {submissionAiPercentage[activity.id][i] !== null
+          ? `${submissionAiPercentage[activity.id][i]?.toFixed(2)}%`
+          : "Not analyzed"}
+      </p>
+    </div>
+  ))}
+</div>
+
                     ) : (
                       <p>No submissions found.</p>
                     )}
@@ -584,7 +592,8 @@ export default function ActivitiesList({
                         accept=".py,.c,.cpp,.java"
                         multiple
                         onChange={(e) => handleFileSelect(activity.id, e.target.files)}
-                        className="text-teal-300 border-teal-500/30 focus:ring-2 focus:ring-teal-400"
+                        className="w-55 h-10 border border-gray-600 rounded-lg p-1 bg-gray-700/50 text-gray-200 
+                         file:h-8 file:px-4 file:bg-teal-500 file:text-white file:rounded-lg"
                         disabled={hasSubmission[activity.id]}
                       />
                       {selectedFiles[activity.id]?.length > 0 && (

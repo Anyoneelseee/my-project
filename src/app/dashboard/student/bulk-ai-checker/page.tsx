@@ -401,7 +401,8 @@ export default function BulkAICheckerPage() {
                       multiple
                       accept=".py,.cpp,.c,.java"
                       onChange={handleFileChange}
-                      className="mt-2 text-teal-300 bg-gray-800 border-teal-500/20"
+                      className="w-55 h-10 border border-gray-600 rounded-lg p-1 bg-gray-700/50 text-gray-200 
+                         file:h-8 file:px-4 file:bg-teal-500 file:text-white file:rounded-lg"
                       disabled={isProcessing || files.length >= 10}
                     />
                     <Button

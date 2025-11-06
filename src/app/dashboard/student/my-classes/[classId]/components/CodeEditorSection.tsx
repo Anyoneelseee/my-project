@@ -28,14 +28,7 @@ interface Activity {
   deadline: string | null;
 }
 
-interface ExecutionStep {
-  id: number;
-  inputsSoFar: string[];
-  output: string;
-  error: string;
-  status: string;
-  needsInput: boolean;
-}
+const REPLIT_URL = process.env.NEXT_PUBLIC_REPLIT_API_URL || "http://localhost:8080";
 
 const codeTemplates: { [key: string]: string } = {
   python: `print("Enter your name:")
@@ -85,13 +78,6 @@ public class Main {
 }`,
 };
 
-const inputPatterns: { [key: string]: RegExp[] } = {
-  python: [/input\s*\(\s*\)/g, /input\s*\(\s*("[^"]*"|'[^']*')\s*\)/g, /sys\.stdin\.readline\s*\(\s*\)/g],
-  cpp: [/cin\s*>>/g, /getline\s*\(\s*cin\s*,/g],
-  c: [/scanf\s*\(/g, /fgets\s*\(/g],
-  java: [/scanner\.nextLine\s*\(\s*\)/g, /scanner\.nextInt\s*\(\s*\)/g, /bufferedReader\.readLine\s*\(\s*\)/g],
-};
-
 interface CodeEditorSectionProps {
   classId: string;
   activityId?: string | null;
@@ -105,26 +91,25 @@ export default function CodeEditorSection({
 }: CodeEditorSectionProps) {
   const params = useSearchParams();
   const activityId = params.get("activityId") ?? propActivityId;
-    const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-   const [activity, setActivity] = useState<Activity | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
   const [signedImg, setSignedImg] = useState<string | null>(null);
   const [code, setCode] = useState(codeTemplates.python);
   const [language, setLanguage] = useState("python");
-  const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [output, setOutput] = useState("");
+  const [pendingInputs, setPendingInputs] = useState<string[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
-  const [totalInputsNeeded, setTotalInputsNeeded] = useState(0);
-  const [showApiLimitDialog, setShowApiLimitDialog] = useState(false);
-  const [showConnectionErrorDialog, setShowConnectionErrorDialog] = useState(false);
-  const [connectionErrorMessage, setConnectionErrorMessage] = useState("");
+  const [isWaitingForInput, setIsWaitingForInput] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [section, setSection] = useState<string | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [, setPrompts] = useState<string[]>([]);
+  const pollInterval = useRef<NodeJS.Timeout | null>(null);
+  const consoleRef = useRef<HTMLDivElement>(null);
 
   const toggleFullscreen = async () => {
     if (!document.fullscreenElement) {
@@ -146,8 +131,8 @@ export default function CodeEditorSection({
         try {
           await containerRef.current.requestFullscreen();
           setIsFullscreen(true);
-        } catch  {
-          console.warn("Auto fullscreen blocked (user interaction needed)");
+        } catch {
+          console.warn("Auto fullscreen blocked");
         }
       }
     };
@@ -165,12 +150,8 @@ export default function CodeEditorSection({
     return () => document.removeEventListener("keydown", handleKey);
   }, [isFullscreen]);
 
-   
-
   const init = useRef(false);
-  const languageIdMap: { [key: string]: number } = { python: 71, cpp: 54, c: 50, java: 62 };
-
-    useEffect(() => {
+  useEffect(() => {
     if (!activityId || init.current) return;
     init.current = true;
 
@@ -205,7 +186,7 @@ export default function CodeEditorSection({
     load();
   }, [activityId, classId]);
 
-    const logActivity = async (action: string) => {
+  const logActivity = async (action: string) => {
     if (!isEnrolled) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
@@ -217,173 +198,95 @@ export default function CodeEditorSection({
     });
   };
 
-  const analyzeInputsNeeded = (code: string, language: string): number => {
-    if (!inputPatterns[language]) return 0;
-    let inputCount = 0;
-    inputPatterns[language].forEach((pattern) => {
-      const matches = code.match(pattern) || [];
-      inputCount += matches.length;
-    });
-    return inputCount || 1;
+  const startPolling = (sid: string) => {
+    if (pollInterval.current) clearInterval(pollInterval.current);
+    pollInterval.current = setInterval(async () => {
+      try {
+        const res = await fetch(`${REPLIT_URL}/output/${sid}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setOutput(prev => data.output !== prev ? data.output : prev);
+        setIsWaitingForInput(data.waiting);
+        setIsRunning(!data.done && !data.waiting);
+        if (data.done) {
+          stopPolling();
+          setSessionId(null);
+        }
+      } catch (err) {
+        console.error("Poll error:", err);
+      }
+    }, 200);
   };
 
-  const submitCodeToJudge0 = async (sourceCode: string, langId: number, stdin: string) => {
+  const stopPolling = () => {
+    if (pollInterval.current) {
+      clearInterval(pollInterval.current);
+      pollInterval.current = null;
+    }
+  };
+
+  const handleRun = async () => {
+    if (!code.trim()) return;
+
+    stopPolling();
+    setOutput("");
+    setPendingInputs([]);
+    setIsWaitingForInput(false);
+    setIsRunning(true);
+    setSessionId(null);
+
     try {
-      const response = await fetch("/api/judge0", {
+      const res = await fetch(`${REPLIT_URL}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_code: sourceCode, language_id: langId, stdin }),
+        body: JSON.stringify({ code, lang: language }),
       });
-      if (!response.ok) {
-        if (response.status === 429) {
-          setShowApiLimitDialog(true);
-          return null;
-        }
-        throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-      }
-      const data = await response.json();
-      return data.token;
-    } catch (err) {
-      setConnectionErrorMessage(err instanceof Error ? err.message : "Submission failed");
-      setShowConnectionErrorDialog(true);
-      return null;
-    }
-  };
-
-  const pollJudge0Result = async (token: string, currentStep: number, totalInputsNeeded: number) => {
-    try {
-      let attempts = 0;
-      const maxAttempts = 20;
-      const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-      while (attempts < maxAttempts) {
-        const response = await fetch(`/api/judge0?token=${token}`);
-        if (!response.ok) throw new Error(`Poll failed: ${response.status}`);
-        const data = await response.json();
-
-        if (data.status.id > 2) {
-          let stdout = "";
-          let stderr = "";
-          if (data.stdout) {
-            try { stdout = atob(data.stdout).replace(/\0/g, ""); }
-            catch { stdout = data.stdout.replace(/\0/g, ""); }
-          }
-          if (data.stderr) {
-            try { stderr = atob(data.stderr).replace(/\0/g, ""); }
-            catch { stderr = data.stderr.replace(/\0/g, ""); }
-          }
-
-          const needsInput =
-            currentStep < totalInputsNeeded &&
-            ((language === "python" && (stderr.includes("EOFError") || stderr.includes("ValueError"))) ||
-             (language === "c" || language === "cpp") ||
-             (language === "java" && stderr.includes("NoSuchElementException")));
-
-          let displayError = stderr;
-          if (needsInput) {
-            displayError = stderr.includes("EOFError") || stderr.includes("NoSuchElementException") || (language === "c" || language === "cpp")
-              ? "[Info] Waiting for input..."
-              : "[Error] Invalid input, please try again";
-          }
-
-          const outputLines = (language === "cpp" || language === "c" || language === "java")
-            ? stdout.split(/(?<=:\s)/)
-            : stdout.split("\n");
-          const filteredLines = outputLines.filter((line) => line.trim());
-          if (currentStep === 0) setPrompts(filteredLines);
-
-          let newOutput = "";
-          if (currentStep < totalInputsNeeded) {
-            newOutput = filteredLines[currentStep] || "";
-          } else {
-            newOutput = filteredLines[filteredLines.length - 1] || "";
-          }
-
-          return { stdout: newOutput.trim(), stderr: displayError.trim(), status: data.status.description, needsInput };
-        }
-        attempts++;
-        await delay(1000);
-      }
-      throw new Error("Execution timed out");
-    } catch (err) {
-      setConnectionErrorMessage(err instanceof Error ? err.message : "Poll failed");
-      setShowConnectionErrorDialog(true);
-      return { stdout: "", stderr: err instanceof Error ? err.message : "Unknown error", status: "Error", needsInput: false };
-    }
-  };
-
-  const executeStep = async (inputsSoFar: string[], step: number, totalInputsNeeded: number) => {
-    const langId = languageIdMap[language];
-    const stdin = inputsSoFar.join("\n") + (inputsSoFar.length ? "\n" : "");
-    const token = await submitCodeToJudge0(code, langId, stdin);
-    if (!token) return null;
-    return await pollJudge0Result(token, step, totalInputsNeeded);
-  };
-
-    const handleRun = async () => {
-    if (!code.trim()) {
-      setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: "", error: "Code cannot be empty", status: "Error", needsInput: false }]);
-      return;
-    }
-    if (!languageIdMap[language]) {
-      setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: "", error: `Unsupported language: ${language}`, status: "Error", needsInput: false }]);
-      return;
-    }
-
-    const inputsNeeded = analyzeInputsNeeded(code, language);
-    setTotalInputsNeeded(inputsNeeded);
-    setExecutionSteps([]);
-    setCurrentStep(0);
-    setPrompts([]);
-    setIsRunning(true);
-
-    const result = await executeStep([], 0, inputsNeeded);
-    if (result) {
-      const step: ExecutionStep = { id: 0, inputsSoFar: [], output: result.stdout, error: result.stderr, status: result.status, needsInput: result.needsInput };
-      setExecutionSteps([step]);
-      setCurrentStep(1);
-      setIsRunning(false);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const sid = data.session_id;
+      if (!sid) throw new Error("No session ID");
+      setSessionId(sid);
+      startPolling(sid);
       logActivity("Run Code");
-    } else {
+    } catch (err) {
+      console.log(err)
+      setOutput("Failed to connect to backend.");
       setIsRunning(false);
     }
   };
 
   const handleInputSubmit = async () => {
-    if (!userInput.trim()) return;
-    const currentInputs = executionSteps[executionSteps.length - 1]?.inputsSoFar || [];
-    const newInputs = [...currentInputs, userInput];
-    setIsRunning(true);
-
-    const result = await executeStep(newInputs, currentStep, totalInputsNeeded);
-    if (result) {
-      const step: ExecutionStep = { id: currentStep, inputsSoFar: newInputs, output: result.stdout, error: result.stderr, status: result.status, needsInput: result.needsInput };
-      setExecutionSteps((prev) => [...prev, step]);
-      setCurrentStep(currentStep + 1);
-      setUserInput("");
-      setIsRunning(false);
-    } else {
-      setExecutionSteps((prev) => [...prev, { id: currentStep, inputsSoFar: newInputs, output: "", error: "[Error] Failed to process inputs", status: "Error", needsInput: false }]);
-      setCurrentStep(currentStep + 1);
-      setUserInput("");
-      setIsRunning(false);
+    if (!sessionId || !userInput.trim()) return;
+    const input = userInput.trim();
+    setUserInput("");
+    const echo = language === "python" ? `> ${input}\n` : "";
+    setOutput(prev => prev + echo);
+    setPendingInputs(prev => [...prev, input]);
+    try {
+      await fetch(`${REPLIT_URL}/input/${sessionId}`, {
+        method: "POST",
+        body: input,
+      });
+    } catch (err) {
+      console.log(err)
+      setOutput(prev => prev + "\n[Input failed]\n");
     }
+    setIsWaitingForInput(false);
+    setIsRunning(true);
   };
 
   const handleClear = () => {
-    setExecutionSteps([]);
-    setCurrentStep(0);
+    stopPolling();
+    setOutput("");
+    setPendingInputs([]);
     setUserInput("");
-    setTotalInputsNeeded(0);
-    setPrompts([]);
     setIsRunning(false);
+    setIsWaitingForInput(false);
+    setSessionId(null);
   };
 
   const handleSave = () => {
-    if (!code.trim()) {
-      setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: "", error: "Code cannot be empty to save", status: "Error", needsInput: false }]);
-      return;
-    }
+    if (!code.trim()) return;
     const ext = language === "python" ? "py" : language === "cpp" ? "cpp" : language === "c" ? "c" : "java";
     const blob = new Blob([code], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -392,11 +295,9 @@ export default function CodeEditorSection({
     a.download = `code-${Date.now()}.${ext}`;
     a.click();
     URL.revokeObjectURL(url);
-    setExecutionSteps((prev) => [...prev, { id: prev.length, inputsSoFar: [], output: `[Saved] Code saved as code-${Date.now()}.${ext}`, error: "", status: "Accepted", needsInput: false }]);
+    setOutput(prev => prev + `\n[Saved] code-${Date.now()}.${ext}\n`);
     logActivity("Saved Code");
   };
-
-    const isWaitingForInput = executionSteps.length > 0 && executionSteps[executionSteps.length - 1].needsInput && !isRunning;
 
   const handleSubmitCode = async () => {
     if (!activityId || !code.trim()) return;
@@ -410,26 +311,17 @@ export default function CodeEditorSection({
       const res = await fetch("/api/studentsubmit_code", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ 
-          files: [{ fileName, language, code }], 
-          classId, 
-          activityId, 
-          section, 
-          studentId: session.user.id, 
-          refreshToken: session.refresh_token 
+        body: JSON.stringify({
+          files: [{ fileName, language, code }],
+          classId,
+          activityId,
+          section,
+          studentId: session.user.id,
+          refreshToken: session.refresh_token
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-
-      setExecutionSteps((prev) => [...prev, {
-        id: prev.length,
-        inputsSoFar: [],
-        output: "Submitted successfully!",
-        error: "",
-        status: "Success",
-        needsInput: false
-      }]);
-
+      setOutput(prev => prev + "\nSubmitted successfully!\n");
       onSubmitSuccess?.();
       logActivity("Submitted Code");
     } catch (e: unknown) {
@@ -439,12 +331,21 @@ export default function CodeEditorSection({
     }
   };
 
+  useEffect(() => {
+    if (consoleRef.current) {
+      consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
+    }
+  }, [output, pendingInputs, isWaitingForInput]);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
   return (
     <div
       ref={containerRef}
       className="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200 overflow-hidden flex flex-col"
     >
-      {/* Fullscreen Toggle */}
       <div className="absolute top-4 right-4 z-50">
         <Button
           onClick={toggleFullscreen}
@@ -461,27 +362,25 @@ export default function CodeEditorSection({
         </Button>
       </div>
 
-      {/* Activity */}
-{activity && (
-  <Card className="mb-6 rounded-xl bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-teal-500/30 p-5 shadow-lg">
-    <CardHeader>
-      <CardTitle className="text-2xl font-bold text-teal-400">{activity.title ?? "Untitled"}</CardTitle>
-      <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold text-white ${activity.deadline && new Date(activity.deadline) < new Date() ? "bg-red-500" : "bg-teal-500"}`}>
-        {activity.deadline && new Date(activity.deadline) < new Date() ? "Overdue" : "In Progress"}
-      </span>
-    </CardHeader>
-    <CardContent className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-        <p className="bg-gray-700/50 px-3 py-1 rounded-full w-fit text-teal-300">Start: {activity.start_time ? new Date(activity.start_time).toLocaleString() : "—"}</p>
-        <p className="bg-gray-700/50 px-3 py-1 rounded-full w-fit text-teal-300">Deadline: {activity.deadline ? new Date(activity.deadline).toLocaleString() : "—"}</p>
-      </div>
-      {signedImg && <Image src={signedImg} alt="Activity" width={600} height={400} className="rounded-lg max-h-64 w-full object-contain border border-teal-500/30" unoptimized />}
-      <p className="text-sm text-gray-200 bg-gray-800/50 p-4 rounded-lg">{activity.description || "No description."}</p>
-    </CardContent>
-  </Card>
-)}
+      {activity && (
+        <Card className="mb-6 rounded-xl bg-gradient-to-br from-gray-800/90 to-gray-900/90 border border-teal-500/30 p-5 shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-teal-400">{activity.title ?? "Untitled"}</CardTitle>
+            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold text-white ${activity.deadline && new Date(activity.deadline) < new Date() ? "bg-red-500" : "bg-teal-500"}`}>
+              {activity.deadline && new Date(activity.deadline) < new Date() ? "Overdue" : "In Progress"}
+            </span>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <p className="bg-gray-700/50 px-3 py-1 rounded-full w-fit text-teal-300">Start: {activity.start_time ? new Date(activity.start_time).toLocaleString() : "—"}</p>
+              <p className="bg-gray-700/50 px-3 py-1 rounded-full w-fit text-teal-300">Deadline: {activity.deadline ? new Date(activity.deadline).toLocaleString() : "—"}</p>
+            </div>
+            {signedImg && <Image src={signedImg} alt="Activity" width={600} height={400} className="rounded-lg max-h-64 w-full object-contain border border-teal-500/30" unoptimized />}
+            <p className="text-sm text-gray-200 bg-gray-800/50 p-4 rounded-lg">{activity.description || "No description."}</p>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Editor + Console */}
       <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
           <div className="p-3 bg-gray-800/50 border-b border-gray-700">
@@ -541,18 +440,16 @@ export default function CodeEditorSection({
           <div className="p-3 bg-gray-800/50 border-b border-gray-700">
             <h3 className="font-semibold text-teal-400">Console Output</h3>
           </div>
-          <div className="flex-1 p-3 bg-gray-900 overflow-y-auto text-sm">
-            {executionSteps.length === 0 && <span className="text-gray-500">Run code to see output...</span>}
-            {executionSteps.map((step) => (
-              <div key={step.id} className="mb-3">
-                {step.output && <div className="text-green-400">{step.output}</div>}
-                {step.inputsSoFar.map((input, i) => (
-                  <div key={i} className="text-blue-400">&gt; {input}</div>
-                ))}
-                {step.error && <div className="text-red-400">{step.error}</div>}
-              </div>
+          <div
+            ref={consoleRef}
+            className="flex-1 p-3 bg-gray-900 overflow-y-auto text-sm whitespace-pre-wrap"
+          >
+            {output === "" && !isRunning && <span className="text-gray-500">Run code to see output...</span>}
+            <span className="text-green-400">{output}</span>
+            {language !== "python" && pendingInputs.map((inp, i) => (
+              <div key={i} className="text-blue-400">&gt; {inp}</div>
             ))}
-            {isRunning && <div className="text-yellow-400">[Executing...]</div>}
+            {isRunning && !isWaitingForInput && <div className="text-yellow-400 animate-pulse">Running...</div>}
           </div>
 
           {isWaitingForInput && (
@@ -567,8 +464,10 @@ export default function CodeEditorSection({
                     handleInputSubmit();
                   }
                 }}
-placeholder={`Input ${currentStep}/${totalInputsNeeded}`}                className="flex-1 p-2 bg-gray-700 text-white rounded border border-gray-600 focus:ring-2 focus:ring-teal-500"
+                placeholder="Enter input..."
+                className="flex-1 p-2 bg-gray-700 text-white rounded border border-gray-600 focus:ring-2 focus:ring-teal-500"
                 disabled={isRunning}
+                autoFocus
               />
               <Button onClick={handleInputSubmit} disabled={isRunning || !userInput.trim()} size="sm">
                 Submit
@@ -578,7 +477,6 @@ placeholder={`Input ${currentStep}/${totalInputsNeeded}`}                classNa
         </div>
       </div>
 
-      {/* Submit Button */}
       {activityId && (
         <div className="p-4 bg-gray-900/80 backdrop-blur-sm border-t border-teal-500/30">
           <div className="max-w-md">
@@ -590,7 +488,7 @@ placeholder={`Input ${currentStep}/${totalInputsNeeded}`}                classNa
               <Button
                 onClick={handleSubmitCode}
                 disabled={isSubmitting || !code.trim()}
-               className="bg-green-600 hover:bg-green-700 text-lg font-bold py-3 px-6"
+                className="bg-green-600 hover:bg-green-700 text-lg font-bold py-3 px-6"
               >
                 Submit Activity
               </Button>
@@ -600,57 +498,11 @@ placeholder={`Input ${currentStep}/${totalInputsNeeded}`}                classNa
         </div>
       )}
 
-      {/* Dialogs */}
-      <Transition appear show={showApiLimitDialog} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={() => setShowApiLimitDialog(false)}>
-          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-            <div className="fixed inset-0 bg-black bg-opacity-50" />
-          </Transition.Child>
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">API Limit Reached</Dialog.Title>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-200">You’ve reached the maximum number of code execution requests (50 per day). Please wait 24 hours.</p>
-                  </div>
-                  <div className="mt-4">
-                    <button type="button" className="w-full inline-flex justify-center rounded-md border border-transparent bg-teal-500 px-4 py-2 text-sm font-medium text-white hover:bg-teal-600" onClick={() => setShowApiLimitDialog(false)}>
-                      Understood
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
-
-      <Transition appear show={showConnectionErrorDialog} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={() => setShowConnectionErrorDialog(false)}>
-          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-            <div className="fixed inset-0 bg-black bg-opacity-50" />
-          </Transition.Child>
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-teal-400">Connection Error</Dialog.Title>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-200">{connectionErrorMessage}</p>
-                  </div>
-                  <div className="mt-4">
-                    <button type="button" className="w-full inline-flex justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700" onClick={() => setShowConnectionErrorDialog(false)}>
-                      Close
-                    </button>
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
+      <Transition appear show={false} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => {}}>
+          <div />
         </Dialog>
       </Transition>
     </div>
   );
 }
-
