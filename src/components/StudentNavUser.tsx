@@ -1,3 +1,4 @@
+// components/StudentNavUser.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,7 +8,6 @@ import {
   Bell,
   ChevronsUpDown,
   LogOut,
-  Settings2,
   User,
   X,
 } from "lucide-react";
@@ -67,49 +67,39 @@ export function StudentNavUser({
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isNotificationsDialogOpen, setIsNotificationsDialogOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [theme, setTheme] = useState<"light" | "dark">(
-    typeof window !== "undefined" ? (localStorage.getItem("theme") as "light" | "dark" || "dark") : "dark"
-  );
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Load theme
   useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("StudentNavUser mounted for user:", user.email);
-      console.log("User prop:", user);
-    }
-    const storedTheme = localStorage.getItem("theme") as "light" | "dark";
-    if (storedTheme) setTheme(storedTheme);
+    const saved = localStorage.getItem("theme") as "light" | "dark" | null;
+    if (saved) setTheme(saved);
+  }, []);
 
+  // Save theme
+  useEffect(() => {
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  // Initialize subscription manager (NO session check)
+  useEffect(() => {
     const initialize = async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error("No session found:", sessionError?.message);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
         router.push("/login");
         return;
       }
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("Session user ID:", session.user.id);
-      }
-      await subscriptionManager.initialize(session.user.id);
-      await subscriptionManager.syncNotifications(session.user.id);
-      if (process.env.NODE_ENV === "development") {
-        console.log("Initial notifications state:", subscriptionManager.currentNotifications);
-      }
+      await subscriptionManager.initialize(authUser.id);
+      await subscriptionManager.syncNotifications(authUser.id);
 
-      const unsubscribe = subscriptionManager.subscribe((updatedNotifications) => {
-        if (process.env.NODE_ENV === "development") {
-          console.log("Updating notifications state:", updatedNotifications.length, updatedNotifications);
-        }
-        setNotifications(updatedNotifications);
+      const unsubscribe = subscriptionManager.subscribe((updated) => {
+        setNotifications(updated);
       });
 
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
-        if (event === "TOKEN_REFRESHED" && newSession) {
-          if (process.env.NODE_ENV === "development") {
-            console.log("Token refreshed for user:", newSession.user.id);
-          }
-          subscriptionManager.initialize(newSession.user.id);
+      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "TOKEN_REFRESHED" && session) {
+          subscriptionManager.initialize(session.user.id);
         }
       });
 
@@ -122,9 +112,6 @@ export function StudentNavUser({
     initialize();
 
     return () => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("StudentNavUser unmounted for user:", user.email);
-      }
       if (!user.email) {
         subscriptionManager.cleanup();
       }
@@ -134,83 +121,46 @@ export function StudentNavUser({
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      localStorage.removeItem("authToken");
       await subscriptionManager.cleanup();
       router.push("/login");
     } catch (error) {
-      console.error("Logout error:", error);
-      toast.error("Failed to log out. Please try again.", {
+      console.log(error)
+      toast.error("Failed to log out.", {
         style: {
           background: theme === "light" ? "#f1f5f9" : "#1f2937",
           color: theme === "light" ? "#0f172a" : "#e5e7eb",
-          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
+          border: `1px solid ${theme === "light" ? "#14b8a6" : "#2dd4bf"}`,
         },
       });
     }
   };
 
-  const handleProfile = () => {
-    router.push("/profiles");
-  };
-
-  const handleSettings = () => {
-    router.push("/settings");
-  };
-
-  const handleDeleteNotification = async (notificationId: string) => {
-    if (deletingId === notificationId) return;
-    setDeletingId(notificationId);
+  const handleProfile = () => router.push("/profiles");
+  const handleDeleteNotification = async (id: string) => {
+    if (deletingId === id) return;
+    setDeletingId(id);
 
     try {
       const { error } = await supabase
         .from("student_notifications")
         .delete()
-        .eq("id", notificationId)
+        .eq("id", id)
         .eq("student_id", subscriptionManager.currentUserId);
 
-      if (error) {
-        console.error("Error deleting notification:", error.message, error.details, error.hint);
-        if (error.code === "42501") {
-          toast.error("Permission denied. Please check your authentication status.", {
-            style: {
-              background: theme === "light" ? "#f1f5f9" : "#1f2937",
-              color: theme === "light" ? "#0f172a" : "#e5e7eb",
-              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-            },
-          });
-        } else {
-          toast.error(`Failed to delete notification: ${error.message}`, {
-            style: {
-              background: theme === "light" ? "#f1f5f9" : "#1f2937",
-              color: theme === "light" ? "#0f172a" : "#e5e7eb",
-              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-            },
-          });
-        }
-        return;
-      }
+      if (error) throw error;
 
-      subscriptionManager.currentNotifications = subscriptionManager.currentNotifications.filter(
-        (notif) => notif.id !== notificationId
-      );
+      subscriptionManager.currentNotifications = subscriptionManager.currentNotifications.filter(n => n.id !== id);
       subscriptionManager.notifySubscribers();
-      toast.success("Notification deleted successfully.", {
-        style: {
-          background: theme === "light" ? "#f1f5f9" : "#1f2937",
-          color: theme === "light" ? "#0f172a" : "#e5e7eb",
-          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-        },
-      });
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      toast.error("An unexpected error occurred.", {
-        style: {
-          background: theme === "light" ? "#f1f5f9" : "#1f2937",
-          color: theme === "light" ? "#0f172a" : "#e5e7eb",
-          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-        },
-      });
-    } finally {
+      toast.success("Deleted.");
+    }catch (err: unknown) {
+  if (err instanceof Error) {
+    const code = (err as { code?: string }).code;
+    toast.error(code === "42501" ? "Permission denied." : err.message || "Failed.");
+  } else {
+    toast.error("Failed.");
+  }
+}
+ finally {
       setDeletingId(null);
     }
   };
@@ -222,63 +172,31 @@ export function StudentNavUser({
         .delete()
         .eq("student_id", subscriptionManager.currentUserId);
 
-      if (error) {
-        console.error("Error deleting all notifications:", error.message, error.details, error.hint);
-        if (error.code === "42501") {
-          toast.error("Permission denied. Please check your authentication status.", {
-            style: {
-              background: theme === "light" ? "#f1f5f9" : "#1f2937",
-              color: theme === "light" ? "#0f172a" : "#e5e7eb",
-              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-            },
-          });
-        } else {
-          toast.error(`Failed to delete all notifications: ${error.message}`, {
-            style: {
-              background: theme === "light" ? "#f1f5f9" : "#1f2937",
-              color: theme === "light" ? "#0f172a" : "#e5e7eb",
-              border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-            },
-          });
-        }
-        return;
-      }
+      if (error) throw error;
 
       subscriptionManager.currentNotifications = [];
       subscriptionManager.notifySubscribers();
-      toast.success("All notifications deleted successfully.", {
-        style: {
-          background: theme === "light" ? "#f1f5f9" : "#1f2937",
-          color: theme === "light" ? "#0f172a" : "#e5e7eb",
-          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-        },
-      });
+      toast.success("All deleted.");
       if (subscriptionManager.currentUserId) {
         await subscriptionManager.forceSyncAfterDelete(subscriptionManager.currentUserId);
       }
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      toast.error("An unexpected error occurred.", {
-        style: {
-          background: theme === "light" ? "#f1f5f9" : "#1f2937",
-          color: theme === "light" ? "#0f172a" : "#e5e7eb",
-          border: theme === "light" ? "1px solid #14b8a6" : "1px solid #2dd4bf",
-        },
-      });
-    }
+    } catch (err: unknown) {
+  if (err instanceof Error) {
+    toast.error(err.message || "Failed.");
+  } else {
+    toast.error("Failed.");
+  }
+}
+
   };
 
   return (
-    <> 
-    
+    <>
       <SidebarMenu className="bg-transparent">
         <SidebarMenuItem className="bg-transparent">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                className="bg-transparent data-[state=open]:bg-teal-500/20 data-[state=open]:text-teal-400"
-              >
+              <SidebarMenuButton size="lg" className="bg-transparent data-[state=open]:bg-teal-500/20 data-[state=open]:text-teal-400">
                 <Avatar className="h-8 w-8 rounded-lg bg-gray-700">
                   <AvatarImage src={user.avatar} alt={user.name} />
                   <AvatarFallback className="rounded-lg text-gray-200">
@@ -314,28 +232,13 @@ export function StudentNavUser({
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={handleProfile}
-                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
-                >
-                  <User className="mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-gray-600/30" />
-                <DropdownMenuItem
-                  onClick={handleSettings}
-                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
-                >
-                  <Settings2 className="mr-2" />
-                  Settings
+                <DropdownMenuItem onClick={handleProfile} className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                  <User className="mr-2" /> Profile
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={() => setIsNotificationsDialogOpen(true)}
-                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
-                >
+                <DropdownMenuItem onClick={() => setIsNotificationsDialogOpen(true)} className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
                   <div className="relative flex items-center">
                     <Bell className="mr-2" />
                     <span>Notifications</span>
@@ -348,83 +251,65 @@ export function StudentNavUser({
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator className="bg-gray-600/30" />
-              <DropdownMenuItem
-                onClick={() => setIsLogoutDialogOpen(true)}
-                className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
-              >
-                <LogOut className="mr-2" />
-                Log out
+              <DropdownMenuItem onClick={() => setIsLogoutDialogOpen(true)} className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400">
+                <LogOut className="mr-2" /> Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </SidebarMenuItem>
       </SidebarMenu>
 
+      {/* Logout Dialog */}
       <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
         <DialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl max-w-md">
           <DialogHeader>
             <DialogTitle className="text-teal-400">Confirm Logout</DialogTitle>
             <DialogDescription className="text-gray-200">
-              Are you sure you want to log out? You will need to sign in again.
+              Are you sure you want to log out?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsLogoutDialogOpen(false)}
-              className="bg-gray-700/50 text-gray-200 border-gray-600 hover:bg-gray-600"
-            >
+            <Button variant="outline" onClick={() => setIsLogoutDialogOpen(false)} className="bg-gray-700/50 text-gray-200 border-gray-600 hover:bg-gray-600">
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
+            <Button variant="destructive" onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white">
               Logout
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Notifications Dialog */}
       <Dialog open={isNotificationsDialogOpen} onOpenChange={setIsNotificationsDialogOpen}>
         <DialogContent className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl max-w-lg p-6">
-          <button
-            onClick={() => setIsNotificationsDialogOpen(false)}
-            className={`absolute top-3 right-3 bg-transparent ${theme === "light" ? "text-slate-900 hover:text-teal-600" : "text-gray-200 hover:text-teal-300"}`}
-          >
+          <button onClick={() => setIsNotificationsDialogOpen(false)} className="absolute top-3 right-3 bg-transparent text-gray-200 hover:text-teal-300">
             <X className="w-6 h-6" />
           </button>
           <DialogHeader>
             <DialogTitle className="text-teal-400 text-2xl font-extrabold">Notifications</DialogTitle>
             <DialogDescription className="text-gray-200 mt-2">
-              View your recent notifications. Click the &quot;X&quot; to delete.
+              Click the &quot;X&quot; to delete.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[400px] overflow-y-auto space-y-4 mt-4">
             {notifications.length === 0 ? (
-              <div className="text-center text-gray-200 text-sm md:text-base">
-                No notifications available.
-              </div>
+              <div className="text-center text-gray-200 text-sm md:text-base">No notifications.</div>
             ) : (
-              notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`relative p-4 rounded-lg ${theme === "light" ? "bg-gradient-to-br from-slate-100 to-gray-200" : "bg-gray-700/50"} shadow-md`}
-                >
+              notifications.map((n) => (
+                <div key={n.id} className="relative p-4 rounded-lg bg-gray-700/50 shadow-md">
                   <button
-                    onClick={() => handleDeleteNotification(notification.id)}
-                    className={`absolute top-2 right-2 bg-transparent ${theme === "light" ? "text-slate-900 hover:text-teal-600" : "text-gray-200 hover:text-teal-300"}`}
-                    disabled={deletingId === notification.id}
+                    onClick={() => handleDeleteNotification(n.id)}
+                    className="absolute top-2 right-2 bg-transparent text-gray-200 hover:text-teal-300"
+                    disabled={deletingId === n.id}
                   >
-                    <X className={`w-5 h-5 ${deletingId === notification.id ? "opacity-50" : ""}`} />
+                    <X className={`w-5 h-5 ${deletingId === n.id ? "opacity-50" : ""}`} />
                   </button>
                   <div className="flex items-center gap-3">
-                    <Bell className={`w-5 h-5 ${theme === "light" ? "text-teal-600" : "text-teal-300"}`} />
+                    <Bell className="w-5 h-5 text-teal-300" />
                     <div>
-                      <p className={`text-sm md:text-base ${theme === "light" ? "text-slate-900" : "text-gray-200"}`}>{notification.message}</p>
-                      <p className={`text-xs ${theme === "light" ? "text-slate-500" : "text-gray-400"} mt-1`}>
-                        {new Date(notification.created_at).toLocaleString()}
+                      <p className="text-sm md:text-base text-gray-200">{n.message}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(n.created_at).toLocaleString()}
                       </p>
                     </div>
                   </div>
@@ -435,15 +320,12 @@ export function StudentNavUser({
           <DialogFooter className="mt-4">
             <Button
               onClick={handleDeleteAllNotifications}
-              className={`${theme === "light" ? "bg-red-600 hover:bg-red-700" : "bg-red-600 hover:bg-red-700"} text-white font-semibold rounded-lg px-4 py-2 transition-all duration-200`}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg px-4 py-2"
               disabled={notifications.length === 0}
             >
               Delete All
             </Button>
-            <Button
-              asChild
-              className={`${theme === "light" ? "bg-teal-600 hover:bg-teal-700" : "bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700"} text-white font-semibold rounded-lg px-4 py-2 transition-all duration-200`}
-            >
+            <Button asChild className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold rounded-lg px-4 py-2">
               <Link href="/notification/students">View All</Link>
             </Button>
           </DialogFooter>

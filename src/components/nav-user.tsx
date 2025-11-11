@@ -7,7 +7,6 @@ import {
   Bell,
   ChevronsUpDown,
   LogOut,
-  Settings2,
   User,
   X,
 } from "lucide-react";
@@ -269,19 +268,32 @@ export function NavUser({
     };
   }, []); // Removed dependencies for cleanup effect
 
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    subscriptionManager.cleanup();
-    router.push("/login");
-  };
+ // Inside NavUser component
+const handleLogout = async () => {
+  // 1. CLOSE DIALOG IMMEDIATELY
+  setIsLogoutDialogOpen(false);
+
+  try {
+    // 2. SIGN OUT + CLEANUP
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+
+    await subscriptionManager.cleanup();
+
+    // 3. FORCE FULL PAGE RELOAD TO /login
+    window.location.href = "/login";
+
+  } catch (err) {
+    console.error("Logout failed:", err);
+    await subscriptionManager.cleanup();
+    window.location.href = "/login"; // Force anyway
+  }
+};
 
   const handleProfile = () => {
     router.push("/profiles");
   };
 
-  const handleSettings = () => {
-    router.push("/settings");
-  };
 
   const handleDeleteNotification = async (notificationId: string) => {
     try {
@@ -427,15 +439,8 @@ export function NavUser({
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-gray-600/30" />
-                <DropdownMenuItem
-                  onClick={handleSettings}
-                  className="text-gray-200 hover:bg-teal-500/20 hover:text-teal-400"
-                >
-                  <Settings2 className="mr-2" />
-                  Settings
-                </DropdownMenuItem>
+                
               </DropdownMenuGroup>
-              <DropdownMenuSeparator className="bg-gray-600/30" />
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   onClick={() => setIsNotificationsDialogOpen(true)}

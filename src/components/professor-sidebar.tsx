@@ -9,10 +9,13 @@ import {
   PlusCircle,
   LineChart,
   Upload,
+  Home,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
+import { usePathname } from "next/navigation";
+
 import {
   Sidebar,
   SidebarContent,
@@ -28,7 +31,6 @@ interface Class {
   course: string;
   code: string;
 }
-
 export function ProfessorSidebar({
   classes = [],
   ...props
@@ -88,55 +90,63 @@ export function ProfessorSidebar({
     fetchUser();
   }, [classes]);
 
-  const data = {
-    user,
-    navMain: [
-      {
-        title: "Playground",
-        url: "/playground",
-        icon: SquareTerminal,
-        isActive: true,
-      },
-      {
-        title: "Created Classes",
-        url: "/dashboard/professor",
-        icon: PlusCircle,
-        items: classes
-          .filter((cls) => cls && cls.id && cls.name && cls.section)
-          .map((cls) => ({
-            title: `${cls.name} (${cls.section})`,
-            url: `/dashboard/professor/${cls.id}`,
-          })),
-      },
-      {
-        title: "Monitoring",
-        url: "/dashboard/professor/monitoring",
-        icon: BarChart2,
-        items: classes
-          .filter((cls) => cls && cls.id && cls.name && cls.section)
-          .map((cls) => ({
-            title: `${cls.name} (${cls.section})`,
-            url: `/dashboard/professor/monitoring/${cls.id}`,
-          })),
-      },
-      {
-        title: "Analytics",
-        url: "/dashboard/professor/analytics",
-        icon: LineChart,
-        items: classes
-          .filter((cls) => cls && cls.id && cls.name && cls.section)
-          .map((cls) => ({
-            title: `${cls.name} (${cls.section})`,
-            url: `/dashboard/professor/analytics/${cls.id}`,
-          })),
-      },
-      {
-        title: "Bulk AI Checker and Similarity",
-        url: "/dashboard/professor/bulk-ai-checker",
-        icon: Upload,
-      },
-    ],
-  };
+const pathname = usePathname();
+ const data = {
+  user,
+  navMain: [
+    // HOME AT THE TOP
+    {
+      title: "Home",
+      url: "/dashboard/professor",
+      icon: Home,
+      isActive: pathname === "/dashboard/professor", // optional: highlight if on home
+    },
+    {
+      title: "Playground",
+      url: "/playground",
+      icon: SquareTerminal,
+      isActive: pathname === "/playground",
+    },
+    {
+      title: "Created Classes",
+      url: "/dashboard/professor",
+      icon: PlusCircle,
+      items: classes
+        .filter((cls) => cls && cls.id && cls.name && cls.section)
+        .map((cls) => ({
+          title: `${cls.name} (${cls.section})`,
+          url: `/dashboard/professor/${cls.id}`,
+        })),
+    },
+    {
+      title: "Monitoring",
+      url: "/dashboard/professor/monitoring",
+      icon: BarChart2,
+      items: classes
+        .filter((cls) => cls && cls.id && cls.name && cls.section)
+        .map((cls) => ({
+          title: `${cls.name} (${cls.section})`,
+          url: `/dashboard/professor/monitoring/${cls.id}`,
+        })),
+    },
+    {
+      title: "Analytics",
+      url: "/dashboard/professor/analytics",
+      icon: LineChart,
+      items: classes
+        .filter((cls) => cls && cls.id && cls.name && cls.section)
+        .map((cls) => ({
+          title: `${cls.name} (${cls.section})`,
+          url: `/dashboard/professor/analytics/${cls.id}`,
+        })),
+    },
+    {
+      title: "Bulk AI Checker and Similarity",
+      url: "/dashboard/professor/bulk-ai-checker",
+      icon: Upload,
+    },
+  ],
+};
 
   return (
     <Sidebar

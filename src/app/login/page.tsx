@@ -1,18 +1,17 @@
-/* eslint-disable @next/next/no-img-element */
+// app/login/page.tsx
 "use client";
 
 import { useState, FormEvent, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
 import LoginForm from "@/components/login-form";
 import Image from "next/image";
 import Link from "next/link";
 
-// Particle Interface & Background Component
+// Particle Background (unchanged)
 interface Particle {
-  draw(): unknown;
-  update(): unknown;
+  draw(): void;
+  update(): void;
   x: number;
   y: number;
   size: number;
@@ -125,47 +124,45 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      // 1. SIGN IN
+      const { data: { user }, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (signInError) {
+      if (signInError || !user) {
         setError(
-          signInError.message === "Email not confirmed"
+          signInError?.message === "Email not confirmed"
             ? "Please confirm your email address before logging in. Check your inbox for the confirmation link."
-            : signInError.message
+            : signInError?.message || "Invalid credentials."
         );
         setLoading(false);
         return;
       }
 
-      if (!data.session) {
-        setError("Login failed. Please try again.");
-        setLoading(false);
-        return;
-      }
+      // Inside handleSubmit, after fetching role from `users` table
+const { data: profile, error: profileError } = await supabase
+  .from("users")
+  .select("role")
+  .eq("id", user.id)
+  .single();
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        setError("Session verification failed. Please try again.");
-        setLoading(false);
-        return;
-      }
+if (profileError || !profile?.role) {
+  setError("Profile not found. Contact support.");
+  setLoading(false);
+  return;
+}
 
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        setError("Failed to verify user. Please try again.");
-        setLoading(false);
-        return;
-      }
+const role = profile.role as "professor" | "student";
 
-      const role = await getUserRole();
-      if (role) {
-        router.push(`/dashboard/${role}`);
-      } else {
-        setError("Role not found. Please contact support.");
-      }
+// SYNC ROLE TO user_metadata (THIS IS THE KEY)
+await supabase.auth.updateUser({
+  data: { role }
+});
+
+// Now redirect
+router.push(`/dashboard/${role}`);
+
     } catch (err) {
       console.error("Unexpected login error:", err);
       setError("An unexpected error occurred. Please try again.");
@@ -175,19 +172,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white font-sans">
-      {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Main Layout */}
       <main className="flex items-center justify-center h-screen relative z-10 px-4">
         <div className="flex flex-col md:flex-row w-full max-w-5xl rounded-2xl overflow-hidden shadow-xl border border-teal-500/20 backdrop-blur-md">
           
-          {/* Left: Login Form */}
           <div className="w-full md:w-1/2 bg-gray-800/90 p-8 flex flex-col items-center justify-center">
-            <Link
-              href="/"
-              className="flex items-center gap-2 font-bold text-2xl text-teal-400 mb-6"
-            >
+            <Link href="/" className="flex items-center gap-2 font-bold text-2xl text-teal-400 mb-6">
               <Image src="/carmalogo.png" alt="Carma Logo" width={40} height={40} className="rounded-full" />
               CARMA
             </Link>
@@ -203,16 +194,12 @@ export default function LoginPage() {
 
             <p className="mt-6 text-sm text-gray-400">
               Don’t have an account?{" "}
-              <Link
-                href="/signup"
-                className="text-teal-400 hover:text-teal-300 underline transition-colors"
-              >
+              <Link href="/signup" className="text-teal-400 hover:text-teal-300 underline transition-colors">
                 Sign up
               </Link>
             </p>
           </div>
 
-          {/* Right: Illustration */}
           <div className="w-full md:w-1/2 bg-gradient-to-br from-teal-500 to-blue-600 flex flex-col items-center justify-center p-8 text-center relative">
             <div className="absolute inset-0 bg-black/20" />
             <Image

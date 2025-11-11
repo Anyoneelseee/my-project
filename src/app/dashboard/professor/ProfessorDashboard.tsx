@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { redirect } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { getUserRole } from "@/lib/auth";
 import { ProfessorSidebar } from "@/components/professor-sidebar";
 import {
   Breadcrumb,
@@ -32,6 +30,7 @@ interface Class {
 }
 
 export default function ProfessorDashboard() {
+
   const [classes, setClasses] = useState<Class[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
@@ -64,25 +63,12 @@ export default function ProfessorDashboard() {
 
             if (sessionError || !session) {
               console.warn("No session found after retries:", sessionError?.message);
-              redirect("/login");
               return;
             }
 
             const { data: { user }, error: authError } = await supabase.auth.getUser();
             if (authError || !user) {
               console.warn("Auth error:", authError?.message);
-              redirect("/login");
-              return;
-            }
-
-            const role = await getUserRole();
-            if (!role) {
-              console.warn("No user role found");
-              redirect("/login");
-              return;
-            }
-            if (role !== "professor") {
-              redirect("/dashboard/student");
               return;
             }
 
@@ -106,7 +92,6 @@ export default function ProfessorDashboard() {
             }
           } catch (err) {
             console.error("Unexpected error in session handling:", err);
-            redirect("/login");
           } finally {
             setIsLoading(false);
           }
@@ -137,14 +122,12 @@ export default function ProfessorDashboard() {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
         console.warn("No session in create class:", sessionError?.message);
-        redirect("/login");
         return;
       }
 
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) {
         console.warn("Auth error in create class:", authError?.message);
-        redirect("/login");
         return;
       }
 
