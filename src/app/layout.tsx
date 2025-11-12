@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Carma",
+  title: "CARMA",
   description:
     "CODE SIMILARITY DETECTION, AI-GENERATED CODE IDENTIFICATION, REAL-TIME STUDENT ACTIVITY MONITORING FOR ACADEMIC INTEGRITY",
 
