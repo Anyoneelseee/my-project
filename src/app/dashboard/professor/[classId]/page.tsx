@@ -551,6 +551,7 @@ export default function ClassDetailsPage() {
                           activity={activity}
                           signedUrl={signedUrls[activity.id] || ""}
                           onClick={() => setSelectedActivityId(activity.id)}
+ 
                         />
                       ))}
                     </div>

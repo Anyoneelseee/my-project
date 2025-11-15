@@ -157,3 +157,34 @@ html, body {
   }
 }
 
+[data-sonner-toast] {
+  padding: 10px 14px !important;
+  min-height: unset !important;
+  max-width: 320px !important;
+  border-radius: 10px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+
+/* Align icon properly */
+[data-sonner-toast] .sonner-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* Fix text layout */
+[data-sonner-toast] .sonner-content {
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1.2 !important;
+}
+
+/* Reduce description spacing */
+[data-sonner-toast] .sonner-description {
+  margin-top: 2px !important;
+  opacity: 0.8 !important;
+  font-size: 0.85rem !important;
+}

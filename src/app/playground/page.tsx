@@ -338,22 +338,37 @@ const Playground: React.FC = () => {
 
         <CardContent className="pt-6">
           <div className="space-y-6">
-            <div className="flex gap-2 flex-wrap">
-              {Object.keys(codeTemplates).map(l => (
-                <Button
-                  key={l}
-                  onClick={() => {
-                    setLanguage(l);
-                    setCode(codeTemplates[l]);
-                    handleClear();
-                  }}
-                  variant={language === l ? "default" : "outline"}
-                  className="capitalize"
-                >
-                  {l === "cpp" ? "C++" : l}
-                </Button>
-              ))}
-            </div>
+         <div className="flex items-center gap-4 flex-wrap">
+  {/* Language Buttons */}
+  <div className="flex gap-2 flex-wrap">
+    {Object.keys(codeTemplates).map(l => (
+      <Button
+        key={l}
+        onClick={() => {
+          setLanguage(l);
+          setCode(codeTemplates[l]);
+          handleClear();
+        }}
+        variant={language === l ? "default" : "outline"}
+        className="capitalize"
+      >
+        {l === "cpp" ? "C++" : l}
+      </Button>
+    ))}
+  </div>
+
+  {/* Run Button — Pushed to your desired position */}
+  <div className="ml-102">
+    <Button
+      onClick={handleRun}
+      disabled={isRunning || !code.trim()}
+      className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-medium px-6"
+    >
+      <PlayIcon className="h-5 w-5 mr-2" />
+      {isRunning ? "Running..." : "Run"}
+    </Button>
+  </div>
+</div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
@@ -377,14 +392,6 @@ const Playground: React.FC = () => {
                 />
 
                 <div className="flex gap-4 mt-4">
-                  <Button
-                    onClick={handleRun}
-                    disabled={isRunning || !code.trim()}
-                    className="w-1/3 bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white"
-                  >
-                    <PlayIcon className="h-5 w-5 mr-2" />
-                    {isRunning ? "Running..." : "Run"}
-                  </Button>
                   <Button onClick={handleSave} disabled={isRunning} className="w-1/3 bg-gray-700/50 hover:bg-gray-600 text-gray-200">
                     Save
                   </Button>

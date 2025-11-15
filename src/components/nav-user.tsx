@@ -398,7 +398,7 @@ const handleLogout = async () => {
               >
                 <Avatar className="h-8 w-8 rounded-lg bg-gray-700">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg text-gray-200">
+                  <AvatarFallback className="rounded-lg bg-gray-600/30">
                     {user.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -419,7 +419,7 @@ const handleLogout = async () => {
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg bg-gray-700">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg text-gray-200">
+                    <AvatarFallback className="rounded-lg bg-gray-600/30">
                       {user.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>

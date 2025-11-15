@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label, Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { ChevronDownIcon, Upload, Code } from "lucide-react";
+import { ChevronDownIcon, Upload, Code, FileCode } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -48,6 +48,7 @@ export function CreateActivityDialog({
   );
   const [deadlineTime, setDeadlineTime] = useState("23:59");
   const [submissionType, setSubmissionType] = useState<"code" | "file">("file");
+  const [language, setLanguage] = useState<"python" | "c" | "c++" | "java">("python"); // NEW
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,12 +118,13 @@ export function CreateActivityDialog({
           image_url: imagePath,
           start_time: combineDateTime(startDate, startTime),
           deadline: combineDateTime(deadlineDate, deadlineTime),
-          submission_type: submissionType, // NEW FIELD
+          submission_type: submissionType,
+          language: language, // NEW
         },
       ]);
 
       if (insertError) {
-        toast.error("Failed to create activity");
+        toast.error("Failed to create activity: " + insertError.message);
         setIsSubmitting(false);
         return;
       }
@@ -136,6 +138,7 @@ export function CreateActivityDialog({
       setDeadlineDate(new Date(new Date().setDate(new Date().getDate() + 7)));
       setDeadlineTime("23:59");
       setSubmissionType("file");
+      setLanguage("python");
       setIsSubmitting(false);
       onOpenChange(false);
       onActivityCreated();
@@ -310,7 +313,7 @@ export function CreateActivityDialog({
               id="title"
               type="text"
               value={title}
-onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
               className="w-full md:w-96 border border-gray-600 rounded-lg p-2 bg-gray-700/50 text-gray-200 focus:ring-2 focus:ring-teal-500"
               placeholder="e.g., Factorial Program Assignment"
             />
@@ -335,25 +338,64 @@ onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
             <Label className="w-40 text-sm font-medium text-teal-300">Submission</Label>
             <div className="flex gap-2">
               <Button
-                variant={submissionType === "code" ? "default" : "outline"}
+                variant="outline"
                 size="sm"
                 onClick={() => setSubmissionType("code")}
-                className="flex items-center gap-1"
+                className={`
+                  flex items-center gap-1 transition-all duration-200
+                  ${submissionType === "code"
+                    ? "bg-teal-500/20 border-teal-500 text-teal-300 hover:bg-teal-500/30"
+                    : "bg-black border-gray-700 text-gray-200 hover:border-teal-500 hover:text-teal-300 hover:bg-teal-500/10"
+                  }
+                `}
               >
                 <Code className="w-4 h-4" />
                 Code Editor
               </Button>
+
               <Button
-                variant={submissionType === "file" ? "default" : "outline"}
+                variant="outline"
                 size="sm"
                 onClick={() => setSubmissionType("file")}
-                className="flex items-center gap-1"
+                className={`
+                  flex items-center gap-1 transition-all duration-200
+                  ${submissionType === "file"
+                    ? "bg-teal-500/20 border-teal-500 text-teal-300 hover:bg-teal-500/30"
+                    : "bg-black border-gray-700 text-gray-200 hover:border-teal-500 hover:text-teal-300 hover:bg-teal-500/10"
+                  }
+                `}
               >
                 <Upload className="w-4 h-4" />
                 File Upload
               </Button>
             </div>
           </div>
+
+          {/* Language Toggle - NEW */}
+        {/* Language Toggle */}
+<div className="flex items-center gap-4">
+  <Label className="w-40 text-sm font-medium text-teal-300">Language</Label>
+  <div className="flex gap-2 flex-wrap">
+    {(["python", "c", "c++", "java"] as const).map((lang) => (
+      <Button
+        key={lang}
+        variant="outline"
+        size="sm"
+        onClick={() => setLanguage(lang)}
+        className={`
+          flex items-center gap-1 transition-all duration-200
+          ${language === lang
+            ? "bg-teal-500/20 border-teal-500 text-teal-300 hover:bg-teal-500/30"
+            : "bg-black border-gray-700 text-gray-200 hover:border-teal-500 hover:text-teal-300 hover:bg-teal-500/10"
+          }
+        `}
+      >
+        <FileCode className="w-4 h-4" />
+        {lang.toUpperCase()}
+      </Button>
+    ))}
+  </div>
+</div>
 
           <DateTimePicker label="Start Time" date={startDate} setDate={setStartDate} time={startTime} setTime={setStartTime} />
           <DateTimePicker label="Deadline" date={deadlineDate} setDate={setDeadlineDate} time={deadlineTime} setTime={setDeadlineTime} />

@@ -189,7 +189,7 @@ export default function SignupFormDemo() {
         <div className="bg-gray-800/90 backdrop-blur-md p-6 sm:p-8 md:p-10 rounded-xl shadow-xl border border-teal-500/20 w-full max-w-lg">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 font-bold text-2xl text-teal-400 mb-6">
-            <Image src="/carmalogo.png" alt="Carma Logo" width={40} height={40} className="rounded-full" />
+            <Image src="/favicon-512-v3.png" alt="Carma Logo" width={40} height={40} className="rounded-full" />
             CARMA
           </Link>
 

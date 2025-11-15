@@ -12,6 +12,7 @@ import {
   Save,
   Trash2,
   AlertCircle,
+  Loader2, // ← NEW IMPORT
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -61,6 +62,7 @@ export default function ProfilePage() {
   const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [isDeleting, setIsDeleting] = useState(false); // ← NEW STATE
 
   // Load theme
   useEffect(() => {
@@ -142,17 +144,44 @@ export default function ProfilePage() {
     }
   };
 
+  // ← REPLACED: Now uses delete_user_account() function
   const handleDeleteAccount = async () => {
     if (!user) return;
+
+    setIsDeleting(true);
+
     try {
-      const { error } = await supabase.from("users").delete().eq("id", user.id);
-      if (error) throw new Error(`Failed to delete account: ${error.message}`);
+      const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
+      if (authErr || !authUser) {
+        toast.error("You are not logged in.");
+        setIsDeleting(false);
+        return;
+      }
+
+      const { error } = await supabase.rpc("delete_user_account", {
+        p_user_id: authUser.id,
+      });
+        //console.log("RPC ERROR:", error); // ← THIS IS THE KEY
+      if (error) throw error;
+
       await supabase.auth.signOut();
-      toast.success("Account deleted successfully.");
+      toast.success("Your account and all data have been permanently deleted.");
       router.push("/login");
-    } catch (err) {
-      console.error("Error deleting account:", err);
-      toast.error(err instanceof Error ? err.message : "Failed to delete account.");
+    }catch (err: unknown) {
+  console.error("Account deletion error:", err);
+
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+      ? err
+      : "Failed to delete account.";
+
+  toast.error(message);
+}
+finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -401,9 +430,23 @@ export default function ProfilePage() {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} className={`${theme === "light" ? "bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200" : "bg-slate-700/50 text-slate-100 border-slate-600 hover:bg-slate-600"} rounded-full px-6 py-2 text-sm font-medium`}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteAccount} className="bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2 text-sm font-medium transition-transform hover:scale-105">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2 text-sm font-medium transition-transform hover:scale-105 flex items-center"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

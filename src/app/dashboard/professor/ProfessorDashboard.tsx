@@ -1,3 +1,4 @@
+// app/dashboard/professor/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -14,12 +15,13 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { CreateClassDialog } from "./CreateClassDialog";
 import { ClassCodeDialog } from "./ClassCodeDialog";
 import { ClassCard } from "./ClassCard";
 import { toast } from "sonner";
-import Link from "next/link";
+import { motion } from "framer-motion";
+import { Plus } from "lucide-react";
 
 interface Class {
   id: string;
@@ -30,109 +32,97 @@ interface Class {
 }
 
 export default function ProfessorDashboard() {
-
   const [classes, setClasses] = useState<Class[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
-  const [newClass, setNewClass] = useState({ name: "", section: "", course: "" });
+  const [newClass, setNewClass] = useState({
+    name: "",
+    section: "",
+    course: "",
+  });
   const [classCode, setClassCode] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
+  // =========================================================
+  // AUTH & DATA INITIALIZATION
+  // =========================================================
   useEffect(() => {
     const initialize = async () => {
       setIsLoading(true);
-      try {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-          if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-            subscription.unsubscribe();
-            proceedWithSession();
+
+      const proceedWithSession = async () => {
+        try {
+          let session = null;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const { data } = await supabase.auth.getSession();
+            session = data?.session;
+            if (session) break;
+            await new Promise((resolve) => setTimeout(resolve, 300));
           }
-        });
 
-        const proceedWithSession = async () => {
-          try {
-            let session = null;
-            let sessionError = null;
-            for (let attempt = 0; attempt < 3; attempt++) {
-              const result = await supabase.auth.getSession();
-              session = result.data.session;
-              sessionError = result.error;
-              if (session) break;
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            }
+          if (!session) return;
 
-            if (sessionError || !session) {
-              console.warn("No session found after retries:", sessionError?.message);
-              return;
-            }
+          const { data: userResult } = await supabase.auth.getUser();
+          const user = userResult?.user;
+          if (!user) return;
 
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) {
-              console.warn("Auth error:", authError?.message);
-              return;
-            }
+          const { data, error } = await supabase.rpc("get_professor_classes");
 
-            const { data, error } = await supabase.rpc("get_professor_classes");
-
-            if (error) {
-              console.warn("Failed to fetch classes:", error.message);
-              setClasses([]);
-            } else {
-              const validatedClasses = (data as Class[]).filter(
-                (cls): cls is Class =>
-                  cls &&
-                  typeof cls.id === "string" &&
-                  typeof cls.name === "string" &&
-                  typeof cls.section === "string" &&
-                  typeof cls.course === "string" &&
-                  typeof cls.code === "string"
-              );
-              console.log("Validated classes:", validatedClasses);
-              setClasses(validatedClasses);
-            }
-          } catch (err) {
-            console.error("Unexpected error in session handling:", err);
-          } finally {
-            setIsLoading(false);
+          if (error || !Array.isArray(data)) {
+            setClasses([]);
+          } else {
+            const validated = (data as Class[]).filter(
+              (cls): cls is Class =>
+                cls &&
+                typeof cls.id === "string" &&
+                typeof cls.name === "string" &&
+                typeof cls.section === "string" &&
+                typeof cls.course === "string" &&
+                typeof cls.code === "string"
+            );
+            setClasses(validated);
           }
-        };
-      } catch (err) {
-        console.error("Unexpected error:", err);
-        setClasses([]);
-        setIsLoading(false);
-      }
+        } catch (err) {
+          console.error("Error loading classes:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+          subscription.unsubscribe();
+          proceedWithSession();
+        }
+      });
+
+      proceedWithSession();
     };
 
     initialize();
   }, []);
 
+  // =========================================================
+  // CREATE CLASS HANDLER
+  // =========================================================
   const handleCreateClass = async () => {
     if (!newClass.name || !newClass.section || !newClass.course) {
-      toast.error("Please fill in all fields.", {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
+      toast.error("Please fill in all fields.");
       return;
     }
 
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.warn("No session in create class:", sessionError?.message);
-        return;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        console.warn("Auth error in create class:", authError?.message);
-        return;
-      }
+      const { data: userResult } = await supabase.auth.getUser();
+      const user = userResult?.user;
+      if (!user) return;
 
       const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const newClassData = {
+      const classData = {
         name: newClass.name,
         section: newClass.section,
         course: newClass.course,
@@ -140,61 +130,44 @@ export default function ProfessorDashboard() {
         professor_id: user.id,
       };
 
-      const { error } = await supabase.from("classes").insert([newClassData]);
-
+      const { error } = await supabase.from("classes").insert([classData]);
       if (error) {
-        console.warn("Failed to create class:", error.message);
-        toast.error("Failed to create class. Please try again.", {
-          style: {
-            background: "#1f2937",
-            color: "#e5e7eb",
-            border: "1px solid #2dd4bf",
-          },
-        });
+        toast.error("Failed to create class.");
         return;
       }
 
-      const { data, error: fetchError } = await supabase.rpc("get_professor_classes");
+      const { data } = await supabase.rpc("get_professor_classes");
+      const validated = (data as Class[]).filter(
+        (cls): cls is Class =>
+          cls &&
+          typeof cls.id === "string" &&
+          typeof cls.name === "string" &&
+          typeof cls.section === "string" &&
+          typeof cls.course === "string" &&
+          typeof cls.code === "string"
+      );
 
-      if (fetchError) {
-        console.warn("Failed to fetch updated classes:", fetchError.message);
-      } else {
-        const validatedClasses = (data as Class[]).filter(
-          (cls): cls is Class =>
-            cls &&
-            typeof cls.id === "string" &&
-            typeof cls.name === "string" &&
-            typeof cls.section === "string" &&
-            typeof cls.course === "string" &&
-            typeof cls.code === "string"
-        );
-        console.log("Updated classes:", validatedClasses);
-        setClasses(validatedClasses);
-      }
-
+      setClasses(validated);
       setClassCode(code);
       setNewClass({ name: "", section: "", course: "" });
       setIsCreateDialogOpen(false);
       setIsCodeDialogOpen(true);
-      toast.success("Successfully created the class!", {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
-    } catch (err) {
-      console.error("Unexpected error in create class:", err);
-      toast.error("An unexpected error occurred. Please try again.", {
-        style: {
-          background: "#1f2937",
-          color: "#e5e7eb",
-          border: "1px solid #2dd4bf",
-        },
-      });
+      toast.success("Class created!");
+    } catch{
+      toast.error("Error creating class.");
     }
   };
 
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      setNewClass({ name: "", section: "", course: "" });
+    }
+    setIsCreateDialogOpen(open);
+  };
+
+  // =========================================================
+  // LOADING STATE
+  // =========================================================
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
@@ -203,6 +176,9 @@ export default function ProfessorDashboard() {
     );
   }
 
+  // =========================================================
+  // MAIN RENDER
+  // =========================================================
   return (
     <SidebarProvider>
       <ProfessorSidebar classes={classes} />
@@ -213,7 +189,7 @@ export default function ProfessorDashboard() {
             <Breadcrumb>
               <BreadcrumbList className="text-sm">
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-teal-400 font-medium font-sans">
+                  <BreadcrumbPage className="text-teal-400 font-medium">
                     Professor Dashboard
                   </BreadcrumbPage>
                 </BreadcrumbItem>
@@ -221,44 +197,98 @@ export default function ProfessorDashboard() {
             </Breadcrumb>
           </div>
         </header>
+
         <div className="p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Create a Class Card */}
-            <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 shadow-lg hover:shadow-xl transition-shadow duration-300 h-[250px] flex flex-col justify-between overflow-hidden rounded-2xl">
-              <CardHeader className="flex-1 flex items-center justify-center p-4">
-                <CardTitle className="text-center text-teal-400 font-bold text-xl md:text-2xl">
-                  Create a Class
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <CreateClassDialog
-                  isOpen={isCreateDialogOpen}
-                  onOpenChange={setIsCreateDialogOpen}
-                  newClass={newClass}
-                  setNewClass={setNewClass}
-                  onCreateClass={handleCreateClass}
-                />
-              </CardContent>
-            </Card>
 
-            {/* Display Created Classes */}
+            {/* CREATE CLASS CARD */}
+            <motion.div
+              whileHover={{ y: -12, scale: 1.04 }}
+              whileTap={{ scale: 0.97 }}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 22 }}
+              className="group"
+            >
+              <Card
+                className="
+                  relative overflow-hidden rounded-2xl
+                  bg-gradient-to-br from-gray-800/95 via-teal-950/90 to-gray-900/95
+                  backdrop-blur-xl
+                  border border-teal-500/30
+                  shadow-xl shadow-teal-500/10
+                  hover:shadow-2xl hover:shadow-teal-500/30
+                  hover:border-teal-400/60
+                  cursor-pointer
+                  transition-all duration-500 ease-out
+                  h-[260px] flex flex-col justify-center items-center p-6
+                  group-hover:ring-4 group-hover:ring-teal-500/20
+                "
+                onClick={() => setIsCreateDialogOpen(true)}
+                aria-label="Create a new class"
+              >
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none">
+                  <div className="absolute top-0 left-0 w-48 h-48 bg-teal-500 rounded-full blur-3xl opacity-20 group-hover:opacity-30 animate-pulse" />
+                  <div className="absolute bottom-0 right-0 w-48 h-48 bg-emerald-500 rounded-full blur-3xl opacity-20 group-hover:opacity-30 animate-pulse delay-500" />
+                </div>
+
+                <div className="relative z-10 mb-5">
+                  <div className="
+                    w-16 h-16 rounded-2xl
+                    bg-gradient-to-br from-teal-500/25 to-emerald-500/25
+                    backdrop-blur-md
+                    border border-teal-400/50
+                    shadow-lg
+                    flex items-center justify-center
+                    group-hover:scale-110 group-hover:rotate-6
+                    transition-all duration-500 ease-out
+                  ">
+                    <Plus className="w-8 h-8 text-teal-300 group-hover:text-white transition-colors duration-300" />
+                  </div>
+                </div>
+
+                <div className="relative z-10 text-center space-y-2">
+                  <h3 className="text-2xl md:text-3xl font-extrabold text-white drop-shadow-md group-hover:text-teal-300 transition-colors duration-300">
+                    Create a Class
+                  </h3>
+                  <p className="text-sm text-teal-300/90 font-medium group-hover:text-teal-200 transition-colors duration-300">
+                    Start teaching in seconds
+                  </p>
+                </div>
+
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-700 origin-center" />
+              </Card>
+            </motion.div>
+
+            {/* DISPLAY CLASSES – WITH DELETE SUPPORT */}
             {classes.length > 0 ? (
               classes.map((classData) => (
-                <Link
-                  href={`/dashboard/professor/${classData.id}`}
-                  key={classData.id}
-                  className="hover:scale-105 transition-transform duration-200"
-                >
-                  <ClassCard classData={classData} />
-                </Link>
+                <div key={classData.id} className="group">
+                  <ClassCard
+                    classData={classData}
+                    onDelete={(deletedId) => {
+                      setClasses((prev) => prev.filter((c) => c.id !== deletedId));
+                    }}
+                  />
+                </div>
               ))
             ) : (
-              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center text-teal-300 text-lg">
-                No classes created yet. Click &quot;Create a Class&quot; to get started!
+              <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center text-teal-300 text-lg mt-8">
+                No classes created yet. Click &quot;Create a Class&ldquo; to get started!
               </div>
             )}
           </div>
         </div>
+
+        {/* DIALOGS */}
+        <CreateClassDialog
+          isOpen={isCreateDialogOpen}
+          onOpenChange={handleDialogClose}
+          newClass={newClass}
+          setNewClass={setNewClass}
+          onCreateClass={handleCreateClass}
+        />
+
         <ClassCodeDialog
           isOpen={isCodeDialogOpen}
           onOpenChange={setIsCodeDialogOpen}
