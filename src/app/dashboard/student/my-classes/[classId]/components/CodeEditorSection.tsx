@@ -229,7 +229,7 @@ export default function CodeEditorOnly({ onSubmitSuccess }: CodeEditorOnlyProps)
     setSubmitError(null);
     try {
       // Replace with your actual API call
-      const res = await fetch("/api/submit_code", {
+      const res = await fetch("/api/studentsubmit_code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, language }),

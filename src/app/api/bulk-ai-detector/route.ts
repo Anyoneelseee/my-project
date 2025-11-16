@@ -1,13 +1,12 @@
 // src/app/api/bulk-ai-detector/route.ts
 import { NextResponse } from "next/server";
 
-const FASTAPI_URL = "http://localhost:8000/api/bulk-ai-detector";
+const FASTAPI_URL = process.env.NEXT_PUBLIC_AI_DETECTOR_URL || "http://localhost:8000";
 
 export async function POST(request: Request) {
   try {
     const { codes } = await request.json();
 
-    // Validate: must be array of strings
     if (!Array.isArray(codes) || codes.length === 0 || codes.length > 10) {
       return NextResponse.json(
         { error: "Provide 1-10 code snippets" },
@@ -15,16 +14,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Transform: [{ code: "..." }, ...] → FastAPI expects this
     const payload = codes.map((code: string) => ({ code }));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 28000);
 
-    const response = await fetch(FASTAPI_URL, {
+    // Correct: Append endpoint here
+    const response = await fetch(`${FASTAPI_URL}/api/bulk-ai-detector`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload), // ← CORRECT
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
@@ -36,9 +35,9 @@ export async function POST(request: Request) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data.results); // ← Return results array
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Bulk AI Detector error:", error);
+    console.error("AI Detector error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
