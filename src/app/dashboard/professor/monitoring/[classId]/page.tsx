@@ -29,7 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, RefreshCw, Pause, Play } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import React from "react";
 
@@ -66,32 +66,29 @@ interface AggregatedLog {
   all_logs: ActivityLog[];
 }
 
-// Manually define REALTIME_SUBSCRIBE_STATES since it's not exported
 const REALTIME_SUBSCRIBE_STATES = {
-  CLOSED: 'CLOSED',
-  CHANNEL_ERROR: 'CHANNEL_ERROR',
-  SUBSCRIBED: 'SUBSCRIBED',
-};
+  CLOSED: "CLOSED",
+  CHANNEL_ERROR: "CHANNEL_ERROR",
+  SUBSCRIBED: "SUBSCRIBED",
+} as const;
 
 export default function MonitoringPage() {
   const { classId } = useParams();
   const router = useRouter();
-  const [classData, setClassData] = useState<Class | null>(null);
+  const [allClasses, setAllClasses] = useState<Class[]>([]);
+  const [currentClass, setCurrentClass] = useState<Class | null>(null);
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch logs manually
   const fetchLogs = useCallback(async () => {
     try {
       const { data: logsData, error: logsError } = await supabase
         .rpc("get_activity_logs", { class_id: classId });
       if (logsError) {
-        console.warn("RPC fetch failed:", logsError.message, logsError.details);
         setErrorMessage("Failed to load activity logs. Please try again.");
         setLogs([]);
       } else {
@@ -105,17 +102,13 @@ export default function MonitoringPage() {
           timestamp: log.timestamp,
         }));
         setLogs(formattedLogs);
-        setRefreshKey((prev) => prev + 1);
-        console.log("Fetched logs:", formattedLogs);
         setErrorMessage(null);
       }
-    } catch (err) {
-      console.error("Fetch logs error:", err);
+    } catch {
       setErrorMessage("An error occurred while fetching logs.");
     }
   }, [classId]);
 
-  // Initial fetch
   useEffect(() => {
     const initialize = async () => {
       setIsLoading(true);
@@ -131,50 +124,41 @@ export default function MonitoringPage() {
           try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session) {
-              console.error("No session:", sessionError?.message);
-              router.push("/login");
-              return;
-            }
-
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) {
-              console.error("Auth error:", authError?.message);
               router.push("/login");
               return;
             }
 
             const role = await getUserRole();
             if (!role || role !== "professor") {
-              console.warn("Invalid role:", role);
               router.push("/dashboard/student");
               return;
             }
 
-            const { data: classDataArray, error: classError } = await supabase
-              .rpc("get_professor_classes")
-              .eq("id", classId);
-
-            if (classError || !classDataArray || classDataArray.length === 0) {
-              console.error("Class fetch error:", classError?.message);
+            const { data: allClassesData, error: allClassesError } = await supabase
+              .rpc("get_professor_classes");
+            if (allClassesError || !allClassesData || allClassesData.length === 0) {
               router.push("/dashboard/professor");
               return;
             }
+            setAllClasses(allClassesData as Class[]);
 
-            const classData = classDataArray[0] as Class;
-            setClassData(classData);
+            const current = allClassesData.find((c: Class) => c.id === classId);
+            if (!current) {
+              router.push("/dashboard/professor");
+              return;
+            }
+            setCurrentClass(current);
 
             await fetchLogs();
-          } catch (err) {
-            console.error("Unexpected error:", err);
-            setErrorMessage("An unexpected error occurred. Please try again later.");
+          } catch {
+            setErrorMessage("An unexpected error occurred.");
             router.push("/dashboard/professor");
           } finally {
             setIsLoading(false);
           }
         };
-      } catch (err) {
-        console.error("Unexpected error:", err);
-        setErrorMessage("An unexpected error occurred. Please try again later.");
+      } catch {
+        setErrorMessage("An unexpected error occurred.");
         router.push("/dashboard/professor");
       }
     };
@@ -182,21 +166,12 @@ export default function MonitoringPage() {
     initialize();
   }, [classId, router, fetchLogs]);
 
-  // Real-time subscription with reconnection
+  // Real-time subscription
   useEffect(() => {
-    if (isPaused) {
-      console.log("Real-time subscription paused for class:", classId);
-      return;
-    }
-
-    console.log("Initializing real-time subscription for class:", classId);
+    if (isPaused) return;
 
     const channel = supabase
-      .channel(`activity_logs:class_${classId}`, {
-        config: {
-          broadcast: { ack: true },
-        },
-      })
+      .channel(`activity_logs:class_${classId}`, { config: { broadcast: { ack: true } } })
       .on(
         "postgres_changes",
         {
@@ -207,15 +182,13 @@ export default function MonitoringPage() {
         },
         async (payload) => {
           try {
-            console.log("Received real-time payload:", payload);
             const { data: userData, error: userError } = await supabase
               .from("users")
               .select("first_name, last_name")
               .eq("id", payload.new.student_id)
               .single();
-            if (userError) {
-              console.warn("Failed to fetch user:", userError.message);
-            }
+            if (userError) return;
+
             const newLog: ActivityLog = {
               id: payload.new.id,
               student_id: payload.new.student_id,
@@ -225,26 +198,14 @@ export default function MonitoringPage() {
               action: payload.new.action,
               timestamp: payload.new.timestamp,
             };
-            setLogs((prev) => {
-              const updatedLogs = [newLog, ...prev].slice(0, 1000);
-              console.log("Appended real-time log:", newLog, "Total logs:", updatedLogs.length);
-              return updatedLogs;
-            });
-            setRefreshKey((prev) => prev + 1);
-          } catch (err) {
-            console.error("Error processing real-time log:", err);
+            setLogs((prev) => [newLog, ...prev].slice(0, 1000));
+          } catch {
             setErrorMessage("Error processing real-time updates.");
           }
         }
       )
-      .subscribe((status, err) => {
-        if (err) {
-          console.error("Subscription error:", err);
-          setErrorMessage("Real-time updates failed. Please refresh the page.");
-        }
-        console.log("Subscription status:", status);
+      .subscribe((status) => {
         if (status === REALTIME_SUBSCRIBE_STATES.CLOSED || status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR) {
-          console.log("Attempting to reconnect to channel:", `activity_logs:class_${classId}`);
           setTimeout(() => {
             supabase.channel(`activity_logs:class_${classId}`).subscribe();
           }, 5000);
@@ -252,26 +213,19 @@ export default function MonitoringPage() {
       });
 
     return () => {
-      console.log("Unsubscribing from real-time channel:", `activity_logs:class_${classId}`);
       supabase.removeChannel(channel);
     };
   }, [classId, isPaused]);
 
-  // Fallback polling for logs
+  // Polling fallback
   useEffect(() => {
     if (isPaused) return;
-
-    const interval = setInterval(() => {
-      console.log("Polling logs for class:", classId);
-      fetchLogs();
-    }, 5000);
-
+    const interval = setInterval(fetchLogs, 5000);
     return () => clearInterval(interval);
-  }, [classId, isPaused, fetchLogs]);
+  }, [isPaused, fetchLogs]);
 
-  // Aggregate and filter logs
+  // Aggregate and filter logs — CLEAN
   const aggregatedLogs = useMemo(() => {
-    console.log("Recomputing aggregatedLogs, refreshKey:", refreshKey, "logs count:", logs.length);
     const logMap = new Map<string, AggregatedLog>();
     logs
       .filter((log) =>
@@ -300,143 +254,208 @@ export default function MonitoringPage() {
           });
         }
       });
-    const result = Array.from(logMap.values()).sort((a, b) =>
+    return Array.from(logMap.values()).sort((a, b) =>
       new Date(b.latest_timestamp).getTime() - new Date(a.latest_timestamp).getTime()
     );
-    console.log("Aggregated logs:", result);
-    return result;
-  }, [logs, filter, refreshKey]);
+  }, [logs, filter]);
 
-  const toggleExpand = useCallback((studentId: string) => {
-    setExpandedStudents((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(studentId)) {
-        newSet.delete(studentId);
-      } else {
-        newSet.add(studentId);
-      }
-      return newSet;
-    });
-  }, []);
+const toggleExpand = useCallback((studentId: string) => {
+  setExpandedStudents((prev) => {
+    const newSet = new Set(prev);
+
+    if (newSet.has(studentId)) {
+      newSet.delete(studentId);
+    } else {
+      newSet.add(studentId);
+    }
+
+    return newSet;
+  });
+}, []);
+
+
+
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        <div className="text-2xl font-bold text-teal-300 animate-pulse">Loading Monitoring...</div>
+      </div>
+    );
   }
 
-  if (!classData) {
-    return <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">Class not found.</div>;
+  if (!currentClass) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-teal-300">
+        Class not found.
+      </div>
+    );
   }
 
   return (
     <SidebarProvider>
-      <ProfessorSidebar classes={[classData]} />
+      <ProfessorSidebar classes={allClasses} />
+
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+        <header className="flex h-16 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
           <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
           <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
-                  Professor Dashboard
+                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium">
+                  Dashboard
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
                 <BreadcrumbPage className="text-teal-400 text-sm font-medium">
-                  Monitoring - {classData.name} ({classData.section})
+                  Monitoring - {currentClass.name}
                 </BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
-          <div className="max-w-7xl mx-auto space-y-8">
-            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-              <CardHeader className="border-b border-teal-500/20 flex flex-row justify-between items-center">
-                <CardTitle className="text-xl font-semibold text-teal-400">
-                  Student Activity Logs
-                </CardTitle>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Filter by student or action"
-                    value={filter}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
-                    className="w-64 bg-gray-700/50 text-teal-300 border-teal-500/20 focus:ring-teal-500 focus:border-teal-500"
-                  />
-                  <Button
-                    onClick={() => setIsPaused(!isPaused)}
-                    variant={isPaused ? "default" : "outline"}
-                    className={`${isPaused ? "bg-teal-500 hover:bg-teal-600" : "bg-gray-700/50 hover:bg-gray-600 text-teal-300"} text-white font-semibold py-2 rounded-lg transition-colors`}
-                  >
-                    {isPaused ? "Resume Updates" : "Pause Updates"}
-                  </Button>
-                  <Button
-                    onClick={fetchLogs}
-                    variant="outline"
-                    className="bg-gray-700/50 hover:bg-gray-600 text-teal-300 font-semibold py-2 rounded-lg transition-colors"
-                    title="Refresh logs"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
+
+        <main className="p-4 md:p-6 lg:p-8 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
+          <div className="max-w-8xl mx-auto space-y-6">
+
+            <Card className="border border-teal-500/30 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl shadow-2xl rounded-3xl overflow-hidden">
+              <CardHeader className="border-b border-teal-500/20 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 p-5 md:p-7">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-2xl md:text-3xl font-bold text-teal-400">
+                      Live Student Activity
+                    </CardTitle>
+                    <p className="text-sm md:text-base text-teal-300 mt-1">
+                      {currentClass.name} • {currentClass.section}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <Input
+                      placeholder="Search student or action..."
+                      value={filter}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setFilter(e.target.value)}
+                      className="w-full sm:w-64 bg-gray-700/50 text-teal-300 border-teal-500/30 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 rounded-xl text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => setIsPaused(!isPaused)}
+                        variant={isPaused ? "default" : "outline"}
+                        className={`flex-1 sm:flex-initial min-w-[120px] h-12 rounded-xl font-bold transition-all ${
+                          isPaused 
+                            ? "bg-teal-500 hover:bg-teal-600 text-white shadow-lg" 
+                            : "bg-gray-700/50 hover:bg-gray-600 text-teal-300 border-teal-500/30"
+                        }`}
+                      >
+                        {isPaused ? (
+                          <>
+                            <Play className="h-4 w-4 mr-2" /> Resume
+                          </>
+                        ) : (
+                          <>
+                            <Pause className="h-4 w-4 mr-2" /> Pause
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={fetchLogs}
+                        variant="outline"
+                        className="h-12 w-12 p-0 rounded-xl bg-gray-700/50 hover:bg-gray-600 text-teal-300 border-teal-500/30"
+                        title="Refresh"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${isPaused ? "" : "animate-spin-slow"}`} />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-6">
+
+              <CardContent className="p-0">
                 {errorMessage ? (
-                  <p className="text-red-400 text-center">{errorMessage}</p>
+                  <div className="p-8 text-center">
+                    <p className="text-red-400 text-lg">{errorMessage}</p>
+                  </div>
                 ) : aggregatedLogs.length === 0 ? (
-                  <p className="text-teal-300 text-center">No activity logs available.</p>
+                  <div className="p-8 text-center">
+                    <p className="text-teal-300 text-lg">No activity logs yet.</p>
+                  </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-teal-400">Student Name</TableHead>
-                        <TableHead className="text-teal-400">Latest Action</TableHead>
-                        <TableHead className="text-teal-400">Last Active</TableHead>
-                        <TableHead className="text-teal-400">Details</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {aggregatedLogs.map((aggLog) => (
-                        <React.Fragment key={aggLog.student_id}>
-                          <TableRow
-                            className={
-                              new Date().getTime() - new Date(aggLog.latest_timestamp).getTime() < 30 * 1000
-                                ? "bg-teal-900/20"
-                                : ""
-                            }
-                          >
-                            <TableCell className="text-teal-300">{aggLog.student_name}</TableCell>
-                            <TableCell className="text-teal-300">{aggLog.latest_action}</TableCell>
-                            <TableCell className="text-teal-300">{new Date(aggLog.latest_timestamp).toLocaleString()}</TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleExpand(aggLog.student_id)}
-                                className="text-teal-400 hover:text-teal-300"
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="border-b border-teal-500/20">
+                          <TableHead className="text-teal-400 font-bold text-sm md:text-base">Student</TableHead>
+                          <TableHead className="text-teal-400 font-bold text-sm md:text-base">Latest Action</TableHead>
+                          <TableHead className="text-teal-400 font-bold text-sm md:text-base hidden sm:table-cell">Last Active</TableHead>
+                          <TableHead className="text-teal-400 font-bold text-right text-sm md:text-base">Details</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {aggregatedLogs.map((aggLog) => {
+                          const isRecent = new Date().getTime() - new Date(aggLog.latest_timestamp).getTime() < 30 * 1000;
+                          return (
+                            <React.Fragment key={aggLog.student_id}>
+                              <TableRow
+                                className={`border-b border-teal-500/10 transition-colors ${
+                                  isRecent ? "bg-teal-900/30 animate-pulse" : "hover:bg-gray-800/30"
+                                }`}
                               >
-                                {expandedStudents.has(aggLog.student_id) ? (
-                                  <ChevronUp className="h-4 w-4" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                          {expandedStudents.has(aggLog.student_id) && (
-                            aggLog.all_logs.map((log) => (
-                              <TableRow key={log.id} className="bg-gray-800/50">
-                                <TableCell colSpan={2} className="pl-8 text-teal-300">{log.action}</TableCell>
-                                <TableCell className="text-teal-300">{new Date(log.timestamp).toLocaleString()}</TableCell>
-                                <TableCell></TableCell>
+                                <TableCell className="font-medium text-teal-300 text-sm md:text-base">
+                                  {aggLog.student_name}
+                                </TableCell>
+                                <TableCell className="text-teal-300 text-sm md:text-base">
+                                  <span className="font-mono text-xs md:text-sm bg-gray-800/50 px-2 py-1 rounded-lg">
+                                    {aggLog.latest_action}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-teal-300 text-xs md:text-sm hidden sm:table-cell">
+                                  {new Date(aggLog.latest_timestamp).toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleExpand(aggLog.student_id)}
+                                    className="text-teal-400 hover:text-teal-300 hover:bg-teal-500/20 rounded-xl"
+                                  >
+                                    {expandedStudents.has(aggLog.student_id) ? (
+                                      <ChevronUp className="h-5 w-5" />
+                                    ) : (
+                                      <ChevronDown className="h-5 w-5" />
+                                    )}
+                                  </Button>
+                                </TableCell>
                               </TableRow>
-                            ))
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </TableBody>
-                  </Table>
+
+                              {expandedStudents.has(aggLog.student_id) && (
+                                <TableRow>
+                                  <TableCell colSpan={4} className="p-0">
+                                    <div className="bg-gray-800/50 border-t border-teal-500/20">
+                                      {aggLog.all_logs.map((log) => (
+                                        <div
+                                          key={log.id}
+                                          className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-6 py-3 border-b border-gray-700/50 last:border-0"
+                                        >
+                                          <span className="font-mono text-xs md:text-sm text-teal-300">
+                                            {log.action}
+                                          </span>
+                                          <span className="text-xs text-gray-400 mt-1 sm:mt-0">
+                                            {new Date(log.timestamp).toLocaleString()}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

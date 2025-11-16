@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
 import ActivitiesList from "./components/ActivitiesList";
@@ -38,7 +39,6 @@ interface RawClassData {
   professor_id: string;
   users: Professor | Professor[];
 }
-
 
 export default function JoinedClassPage() {
   const { classId } = useParams() as { classId: string };
@@ -190,23 +190,35 @@ export default function JoinedClassPage() {
   };
 
   const handleSubmitSuccess = () => {
-    // Trigger re-fetch of activities to update submission status
     setActivities((prev) => [...prev]);
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
-        <div className="text-xl font-semibold text-gray-200">Loading...</div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-indigo-950/80 to-violet-950/90 text-white backdrop-blur-xl"
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full"
+        />
+        <span className="ml-3 text-lg font-medium text-cyan-300">Loading...</span>
+      </motion.div>
     );
   }
 
   if (!classData) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-white">
-        <div className="text-xl font-semibold text-gray-200">Class not found.</div>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-indigo-950/80 to-violet-950/90 text-white backdrop-blur-xl"
+      >
+        <div className="text-xl font-extrabold text-violet-400 drop-shadow-lg">Class not found.</div>
+      </motion.div>
     );
   }
 
@@ -221,132 +233,179 @@ export default function JoinedClassPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900/95 via-indigo-950/80 to-violet-950/90 text-gray-100 flex overflow-hidden">
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:block w-64 bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-r border-teal-500/30 backdrop-blur-md">
-        <div className="p-4 border-b border-teal-500/20">
-          <h2 className="text-lg font-extrabold text-teal-400 truncate">{classData.name}</h2>
-        </div>
-        <nav className="p-4 space-y-2">
-          <Button
-            variant={activeSection === "details" ? "default" : "ghost"}
-            className={`w-full justify-start text-teal-300 hover:bg-teal-500/20 ${
-              activeSection === "details" ? "bg-teal-500/30 text-teal-200" : ""
-            }`}
-            onClick={() => setActiveSection("details")}
-          >
-            <Info className="w-4 h-4 mr-2" />
-            Class Details
-          </Button>
-          <Button
-            variant={activeSection === "activities" ? "default" : "ghost"}
-            className={`w-full justify-start text-teal-300 hover:bg-teal-500/20 ${
-              activeSection === "activities" ? "bg-teal-500/30 text-teal-200" : ""
-            }`}
-            onClick={() => setActiveSection("activities")}
-          >
-            <List className="w-4 h-4 mr-2" />
-            Activities
-          </Button>
-          <Button
-            variant={activeSection === "code" ? "default" : "ghost"}
-            className={`w-full justify-start text-teal-300 hover:bg-teal-500/20 ${
-              activeSection === "code" ? "bg-teal-500/30 text-teal-200" : ""
-            }`}
-            onClick={() => setActiveSection("code")}
-            disabled={!selectedActivityId}
-          >
-            <Code className="w-4 h-4 mr-2" />
-            Code Editor
-          </Button>
+      <motion.aside
+        initial={{ x: -64 }}
+        animate={{ x: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="hidden md:block w-64 bg-white/5 via-gray-900/80 to-black/20 border-r border-cyan-500/20 backdrop-blur-3xl shadow-2xl shadow-cyan-500/10"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="p-6 border-b border-cyan-500/10"
+        >
+          <h2 className="text-xl font-extrabold bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent truncate leading-tight">
+            {classData.name}
+          </h2>
+        </motion.div>
+        <nav className="p-6 space-y-2">
+          {[
+            { id: "details", icon: Info, label: "Class Details", section: "details" as const },
+            { id: "activities", icon: List, label: "Activities", section: "activities" as const },
+            { id: "code", icon: Code, label: "Code Editor", section: "code" as const },
+          ].map(({ id, icon: Icon, label, section }) => (
+            <motion.div key={id} whileHover={{ x: 4 }} transition={{ type: "spring", stiffness: 400 }}>
+              <Button
+                variant={activeSection === section ? "default" : "ghost"}
+                className={`
+                  w-full justify-start rounded-2xl backdrop-blur-md border border-cyan-500/20
+                  text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-400/40 transition-all duration-300
+                  ${activeSection === section ? "bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-cyan-200 shadow-lg shadow-cyan-500/20" : ""}
+                  font-medium tracking-wide
+                `}
+                onClick={() => setActiveSection(section)}
+                disabled={section === "code" && !selectedActivityId}
+              >
+                <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                {label}
+              </Button>
+            </motion.div>
+          ))}
         </nav>
-      </aside>
+      </motion.aside>
 
       {/* Mobile Nav */}
-      <nav className="md:hidden bg-gradient-to-br from-gray-800/90 to-gray-900/90 border-b border-teal-500/20 p-4 flex gap-2">
-        <Button
-          variant={activeSection === "details" ? "default" : "ghost"}
-          className={`text-teal-300 hover:bg-teal-500/20 ${
-            activeSection === "details" ? "bg-teal-500/30 text-teal-200" : ""
-          }`}
-          onClick={() => setActiveSection("details")}
-        >
-          <Info className="w-4 h-4 mr-2" />
-          Details
-        </Button>
-        <Button
-          variant={activeSection === "activities" ? "default" : "ghost"}
-          className={`text-teal-300 hover:bg-teal-500/20 ${
-            activeSection === "activities" ? "bg-teal-500/30 text-teal-200" : ""
-          }`}
-          onClick={() => setActiveSection("activities")}
-        >
-          <List className="w-4 h-4 mr-2" />
-          Activities
-        </Button>
-        <Button
-          variant={activeSection === "code" ? "default" : "ghost"}
-          className={`text-teal-300 hover:bg-teal-500/20 ${
-            activeSection === "code" ? "bg-teal-500/30 text-teal-200" : ""
-          }`}
-          onClick={() => setActiveSection("code")}
-          disabled={!selectedActivityId}
-        >
-          <Code className="w-4 h-4 mr-2" />
-          Code
-        </Button>
-      </nav>
+      <motion.nav
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        className="md:hidden fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-gray-900/95 via-indigo-950/90 to-violet-950/95 border-b border-cyan-500/20 backdrop-blur-xl shadow-2xl shadow-cyan-500/10"
+      >
+        <div className="p-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {[
+            { id: "details", icon: Info, label: "Details", section: "details" as const },
+            { id: "activities", icon: List, label: "Activities", section: "activities" as const },
+            { id: "code", icon: Code, label: "Code", section: "code" as const },
+          ].map(({ id, icon: Icon, label, section }) => (
+            <motion.div key={id} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                variant={activeSection === section ? "default" : "ghost"}
+                className={`
+                  flex-shrink-0 rounded-full px-4 py-2 min-w-max
+                  backdrop-blur-md border border-cyan-500/20
+                  text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-400/40 transition-all duration-300
+                  ${activeSection === section ? "bg-gradient-to-r from-cyan-500/20 to-violet-500/20 text-cyan-200 shadow-lg shadow-cyan-500/20" : ""}
+                  font-medium tracking-wide
+                `}
+                onClick={() => setActiveSection(section)}
+                disabled={section === "code" && !selectedActivityId}
+              >
+                <Icon className="w-4 h-4 mr-2 flex-shrink-0" />
+                {label}
+              </Button>
+            </motion.div>
+          ))}
+        </div>
+      </motion.nav>
 
-      <div className="flex-1 flex flex-col">
-        <header className="flex items-center justify-between p-4 md:p-6 bg-gradient-to-br from-gray-800 to-gray-900 border-b border-teal-500/20">
-          <Button
-            onClick={handleBack}
-            variant="ghost"
-            className="flex items-center gap-2 text-teal-400 hover:bg-teal-500/20 rounded-lg"
+      <div className="flex-1 flex flex-col md:ml-0 pt-safe md:pt-0">
+        <header className="sticky top-0 z-40 p-4 md:p-6 bg-gradient-to-r from-gray-900/95 via-indigo-950/90 to-violet-950/90 border-b border-cyan-500/20 backdrop-blur-xl shadow-xl shadow-cyan-500/10">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between"
           >
-            <ArrowLeft className="w-5 h-5" />
-            Back
-          </Button>
-          <h1 className="text-xl md:text-2xl font-extrabold text-teal-400">
-            {classData.name} - {classData.section}
-          </h1>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={handleBack}
+                variant="ghost"
+                className="flex items-center gap-2 rounded-xl backdrop-blur-md border border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-400/40 transition-all duration-300 shadow-md shadow-cyan-500/10"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back
+              </Button>
+            </motion.div>
+            <motion.h1
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-xl md:text-2xl font-extrabold bg-gradient-to-r from-cyan-400 via-violet-400 to-cyan-400 bg-clip-text text-transparent drop-shadow-lg leading-tight truncate"
+            >
+              {classData.name} - {classData.section}
+            </motion.h1>
+            <div className="w-12" /> {/* Spacer for alignment */}
+          </motion.div>
         </header>
 
-        <main className="p-4 md:p-6 w-full flex-1">
-          {activeSection === "details" && (
-            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl p-6">
-              <ClassDetails classData={classDataForDetails} />
-            </section>
-          )}
+      <main className="flex-1 overflow-hidden"> {/* ← REMOVE padding + overflow-auto */}
+  <AnimatePresence mode="wait">
+   {activeSection === "details" && (
+  <motion.section
+    key="details"
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    className="h-full p-4 md:p-6"
+  >
+    {/* FULL-HEIGHT CARD */}
+    <div className="h-full bg-white/5 via-gray-900/80 to-black/20 border border-cyan-500/20 rounded-3xl backdrop-blur-3xl shadow-2xl shadow-cyan-500/10 overflow-hidden flex flex-col">
+      <ClassDetails classData={classDataForDetails} />
+    </div>
+  </motion.section>
+)}
 
-          {activeSection === "activities" && (
-            <section className="bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 rounded-xl p-6">
-              <ActivitiesList
-                activities={activities}
-                classId={classId}
-                selectedActivityId={selectedActivityId}
-                onStartActivity={handleStartActivity}
-                isLoading={isLoading} // ← pass your loading state
-              />
-            </section>
-          )}
+    {activeSection === "activities" && (
+      <motion.section
+        key="activities"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        className="h-full p-4 md:p-6"
+      >
+        <div className="h-full bg-white/5 via-gray-900/80 to-black/20 border border-cyan-500/20 rounded-3xl backdrop-blur-3xl shadow-2xl shadow-cyan-500/10 overflow-hidden">
+          <ActivitiesList
+            activities={activities}
+            classId={classId}
+            selectedActivityId={selectedActivityId}
+            onStartActivity={handleStartActivity}
+            isLoading={isLoading}
+          />
+        </div>
+      </motion.section>
+    )}
 
-          {activeSection === "code" && selectedActivityId && (
-            <section className="h-full">
-              <CodeEditorSection
-                classId={classId}
-                activityId={selectedActivityId}
-                onSubmitSuccess={handleSubmitSuccess}
-              />
-            </section>
-          )}
+    {/* CODE EDITOR: FULL SCREEN, NO PADDING, NO SCROLL */}
+    {activeSection === "code" && selectedActivityId && (
+      <motion.div
+        key="code"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="h-screen w-screen fixed inset-0 z-50"
+      >
+        <CodeEditorSection
+          onSubmitSuccess={handleSubmitSuccess}
+        />
+      </motion.div>
+    )}
 
-          {activeSection === "code" && !selectedActivityId && (
-            <div className="flex items-center justify-center h-full text-gray-400">
-              <p>Select an activity first to open the code editor.</p>
-            </div>
-          )}
-        </main>
+    {activeSection === "code" && !selectedActivityId && (
+      <motion.div
+        key="code-empty"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center justify-center h-full p-4 md:p-6"
+      >
+        <div className="text-center p-8 bg-white/5 border border-cyan-500/10 rounded-3xl backdrop-blur-xl">
+          <p className="text-lg font-medium text-cyan-300/70">
+            Select an activity first to open the code editor.
+          </p>
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</main>
       </div>
     </div>
   );

@@ -19,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import AceEditor from "react-ace";
+import { Info } from "lucide-react";
+
 import "ace-builds/src-noconflict/mode-python";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/mode-java";
@@ -60,7 +62,8 @@ const REPLIT_URL = process.env.NEXT_PUBLIC_REPLIT_API_URL || "http://localhost:8
 export default function SubmissionViewPage() {
   const { classId, submissionId } = useParams();
   const router = useRouter();
-  const [classData, setClassData] = useState<Class | null>(null);
+  const [allClasses, setAllClasses] = useState<Class[]>([]); // ALL CLASSES
+  const [currentClass, setCurrentClass] = useState<Class | null>(null);
   const [code, setCode] = useState<string>("");
   const [error, setError] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -139,8 +142,7 @@ export default function SubmissionViewPage() {
       if (!sid) throw new Error("No session ID");
       setSessionId(sid);
       startPolling(sid);
-    } catch (err) {
-      console.log(err)
+    } catch {
       setOutput("Failed to connect to backend.");
       setIsRunning(false);
     }
@@ -158,8 +160,7 @@ export default function SubmissionViewPage() {
         method: "POST",
         body: input,
       });
-    } catch (err) {
-      console.log(err)
+    } catch {
       setOutput(prev => prev + "\n[Input failed]\n");
     }
     setIsWaitingForInput(false);
@@ -201,17 +202,22 @@ export default function SubmissionViewPage() {
               return;
             }
 
-            const { data: classDataArray, error: classError } = await supabase
-              .rpc("get_professor_classes")
-              .eq("id", classId);
-
-            if (classError || !classDataArray || classDataArray.length === 0) {
+            // FETCH ALL CLASSES
+            const { data: allClassesData, error: allClassesError } = await supabase
+              .rpc("get_professor_classes");
+            if (allClassesError || !allClassesData || allClassesData.length === 0) {
               router.push("/dashboard/professor");
               return;
             }
+            setAllClasses(allClassesData as Class[]);
 
-            const classData = classDataArray[0] as Class;
-            setClassData(classData);
+            // FIND CURRENT CLASS
+            const current = allClassesData.find((c: Class) => c.id === classId);
+            if (!current) {
+              router.push("/dashboard/professor");
+              return;
+            }
+            setCurrentClass(current);
 
             const [studentId, requestedFileName] = decodeURIComponent(submissionId as string).split("/");
             setFileName(requestedFileName);
@@ -245,7 +251,7 @@ export default function SubmissionViewPage() {
               return;
             }
 
-            const filePath = submissionData.file_path || `submissions/${classData.section}/${studentId}/${submissionData.activity_id}/${submissionData.file_name}`;
+            const filePath = submissionData.file_path || `submissions/${current.section}/${studentId}/${submissionData.activity_id}/${submissionData.file_name}`;
             const { data: fileData, error: fileError } = await supabase.storage
               .from("submissions")
               .download(filePath);
@@ -291,16 +297,16 @@ export default function SubmissionViewPage() {
                   .select("*")
                   .eq("class_id", classId)
                   .eq("activity_id", submissionData.activity_id);
-               if (fetchError || !Array.isArray(allSubmissions) || allSubmissions.length < 3) {
-  setError((prev) => [
-    ...prev,
-    `Not enough submissions for similarity detection. Found: ${Array.isArray(allSubmissions) ? allSubmissions.length : 0}`,
-  ]);
-  return;
-}
+                if (fetchError || !Array.isArray(allSubmissions) || allSubmissions.length < 3) {
+                  setError((prev) => [
+                    ...prev,
+                    `Not enough submissions for similarity detection. Found: ${Array.isArray(allSubmissions) ? allSubmissions.length : 0}`,
+                  ]);
+                  return;
+                }
 
                 const submissionsWithCodePromises = allSubmissions.map(async (sub) => {
-                  const expectedFilePath = sub.file_path || `submissions/${classData.section}/${sub.student_id}/${sub.activity_id}/${sub.file_name}`;
+                  const expectedFilePath = sub.file_path || `submissions/${current.section}/${sub.student_id}/${sub.activity_id}/${sub.file_name}`;
                   const { data: fileData, error: downloadError } = await supabase.storage
                     .from("submissions")
                     .download(expectedFilePath);
@@ -323,9 +329,9 @@ export default function SubmissionViewPage() {
                 );
 
                 if (submissionsWithCode.length < 3) {
-  setError((prev) => [...prev, `Not enough valid submissions... Found: ${submissionsWithCode.length}`]);
-  return;
-}
+                  setError((prev) => [...prev, `Not enough valid submissions... Found: ${submissionsWithCode.length}`]);
+                  return;
+                }
 
                 const codes = submissionsWithCode.map((sub) => sub.code);
                 if (!process.env.NEXT_PUBLIC_SIMILARITY_DETECTOR_URL) {
@@ -372,15 +378,15 @@ export default function SubmissionViewPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
-        Loading...
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        <div className="text-2xl font-bold text-teal-300 animate-pulse">Loading Submission...</div>
       </div>
     );
   }
 
-  if (!classData) {
+  if (!currentClass) {
     return (
-      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-teal-300">
         Class not found.
       </div>
     );
@@ -388,32 +394,24 @@ export default function SubmissionViewPage() {
 
   return (
     <SidebarProvider>
-      <ProfessorSidebar
-        classes={[
-          {
-            id: classId as string,
-            name: classData.name,
-            section: classData.section,
-            course: classData.course,
-            code: classData.code,
-          },
-        ]}
-      />
+      {/* ALL CLASSES IN SIDEBAR */}
+      <ProfessorSidebar classes={allClasses} />
+
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+        <header className="flex h-16 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
           <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
           <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
+                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium">
                   Professor Dashboard
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbLink href={`/dashboard/professor/${classId}`} className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors">
-                  {classData.name}
+                <BreadcrumbLink href={`/dashboard/professor/${classId}`} className="text-teal-300 hover:text-teal-400 text-sm font-medium">
+                  {currentClass.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
@@ -423,159 +421,193 @@ export default function SubmissionViewPage() {
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
-          <div className="max-w-7xl mx-auto space-y-4">
-            <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-              <CardHeader className="border-b border-teal-500/20">
-                <CardTitle className="text-2xl font-semibold text-teal-400">Submission: {fileName}</CardTitle>
-                <p className="text-sm text-teal-300">Submitted by {studentName}</p>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
-                      <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Editor</h3>
-                      <Label className="text-sm font-medium text-teal-300">
-                        Submitted Code ({language || "unknown"})
-                      </Label>
-                      <AceEditor
-                        mode={language === "cpp" || language === "c" ? "c_cpp" : language}
-                        theme="monokai"
-                        value={code}
-                        onChange={setCode}
-                        name="code-editor"
-                        editorProps={{ $blockScrolling: true }}
-                        setOptions={{
-                          enableBasicAutocompletion: true,
-                          enableLiveAutocompletion: true,
-                          enableSnippets: true,
-                          showLineNumbers: true,
-                          tabSize: 2,
-                          fontSize: 14,
-                          wrap: true,
-                        }}
-                        style={{ width: "100%", height: "350px" }}
-                        readOnly={isRunning}
-                      />
-                      <Button
-                        onClick={handleRunCode}
-                        disabled={isRunning || !code.trim() || !language}
-                        className="mt-4 w-full bg-teal-500 hover:bg-teal-600 text-white rounded-lg"
-                      >
-                        {isRunning ? "Running..." : "Run"}
-                      </Button>
-                    </div>
-                    <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
-                      <h3 className="text-lg font-semibold text-teal-400 mb-2">Console Output</h3>
-                      <div
-                        ref={consoleRef}
-                        className="p-4 bg-gray-800 text-white rounded-lg overflow-y-auto text-sm whitespace-pre-wrap"
-                        style={{ width: "100%", height: "350px" }}
-                      >
-                        {output === "" && !isRunning && <span className="text-gray-500">Run code to see output...</span>}
-                        <span className="text-green-400">{output}</span>
-                        {language !== "python" && pendingInputs.map((inp, i) => (
-                          <div key={i} className="text-blue-400">&gt; {inp}</div>
-                        ))}
-                        {isRunning && !isWaitingForInput && <div className="text-yellow-400 animate-pulse">Running...</div>}
-                      </div>
-                      {isWaitingForInput && (
-                        <div className="flex gap-2 mt-2">
-                          <input
-                            type="text"
-                            value={userInput}
-                            onChange={(e) => setUserInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && userInput.trim()) {
-                                e.preventDefault();
-                                handleInputSubmit();
-                              }
-                            }}
-                            placeholder="Enter input..."
-                            className="flex-1 p-2 bg-gray-700 text-white rounded border border-gray-600 focus:ring-2 focus:ring-teal-500"
-                            disabled={isRunning}
-                            autoFocus
-                          />
-                          <Button onClick={handleInputSubmit} disabled={isRunning || !userInput.trim()} size="sm">
-                            Submit
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
-                    <h3 className="text-lg font-semibold text-teal-400 mb-2">AI Detector</h3>
-                    <div className="flex items-center justify-center h-[100px] text-teal-300">
-                      {aiError ? (
-                        <p className="text-red-400">{aiError}</p>
-                      ) : aiPercentage !== null ? (
-                        <p className="text-md font-semibold">
-                          <span className="text-teal-400">AI: {aiPercentage.toFixed(2)}%</span>{" "}
-                          <span className={aiPercentage > 50 ? "text-red-400" : "text-green-400"}>
-                            → {aiPercentage > 50 ? "Likely AI-generated" : "Likely human-written"}
-                          </span>
-                        </p>
-                      ) : (
-                        <p>Loading AI detection...</p>
-                      )}
+        <main className="p-6 md:p-8 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
+          <div className="max-w-8xl mx-auto space-y-8">
+
+            {/* ULTRA PREMIUM CARD */}
+            <Card className="border border-teal-500/30 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-xl shadow-2xl rounded-3xl overflow-hidden">
+              <CardHeader className="border-b border-teal-500/20 bg-gradient-to-r from-teal-500/10 to-cyan-500/10 p-6 md:p-8">
+                <CardTitle className="text-2xl md:text-3xl font-bold text-teal-400">
+                  Submission: <span className="font-mono text-xl">{fileName}</span>
+                </CardTitle>
+                <p className="text-base md:text-lg text-teal-300">Submitted by <span className="font-semibold">{studentName}</span></p>
+              </CardHeader>
+
+              <CardContent className="p-6 md:p-8 space-y-10">
+
+               {/* CODE + CONSOLE — RESPONSIVE HEIGHT */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+  {/* CODE EDITOR */}
+  <div className="flex flex-col">
+    <h3 className="text-xl font-semibold text-teal-400 mb-4">Code Editor</h3>
+    <div className="flex-1 border border-teal-500/30 rounded-2xl overflow-hidden bg-gray-800/50 shadow-inner flex flex-col">
+      <Label className="px-5 pt-4 block text-sm font-medium text-teal-300">
+        Submitted Code ({language || "unknown"})
+      </Label>
+      <div className="flex-1 p-2">
+        <AceEditor
+          mode={language === "cpp" || language === "c" ? "c_cpp" : language}
+          theme="monokai"
+          value={code}
+          onChange={setCode}
+          name="code-editor"
+          editorProps={{ $blockScrolling: true }}
+          setOptions={{
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            enableSnippets: true,
+            showLineNumbers: true,
+            tabSize: 2,
+            fontSize: 15,
+            wrap: true,
+          }}
+          style={{ 
+            width: "100%", 
+            height: "100%", 
+            minHeight: "400px", 
+            maxHeight: "70vh"  // ← NEVER TOO BIG
+          }}
+          readOnly={isRunning}
+        />
+      </div>
+      <div className="p-4 bg-gradient-to-t from-gray-800 to-gray-700">
+        <Button
+          onClick={handleRunCode}
+          disabled={isRunning || !code.trim() || !language}
+          className="w-full h-14 text-lg font-bold bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-xl rounded-xl"
+        >
+          {isRunning ? "Running..." : "Run Code"}
+        </Button>
+      </div>
+    </div>
+  </div>
+
+  {/* CONSOLE — SAME HEIGHT */}
+  <div className="flex flex-col">
+    <h3 className="text-xl font-semibold text-teal-400 mb-4">Console Output</h3>
+    <div className="flex-1 border border-teal-500/30 rounded-2xl bg-gray-800/50 shadow-inner flex flex-col min-h-[400px] max-h-[70vh]">
+      <div
+        ref={consoleRef}
+        className="flex-1 overflow-y-auto font-mono text-sm md:text-base text-green-400 whitespace-pre-wrap p-5"
+      >
+        {output === "" && !isRunning && <span className="text-gray-500">Run code to see output...</span>}
+        <span>{output}</span>
+        {language !== "python" && pendingInputs.map((inp, i) => (
+          <div key={i} className="text-blue-400">&gt; {inp}</div>
+        ))}
+        {isRunning && !isWaitingForInput && <div className="text-yellow-400 animate-pulse">Running...</div>}
+      </div>
+      {isWaitingForInput && (
+        <div className="p-4 bg-gradient-to-t from-gray-800 to-gray-700 flex gap-3">
+          <input
+            type="text"
+            value={userInput}
+            onChange={(e) => setUserInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && userInput.trim()) {
+                e.preventDefault();
+                handleInputSubmit();
+              }
+            }}
+            placeholder="Enter input..."
+            className="flex-1 p-4 bg-gray-700 text-white rounded-xl border border-teal-500/30 focus:ring-2 focus:ring-teal-500 focus:outline-none text-base"
+            autoFocus
+          />
+          <Button onClick={handleInputSubmit} disabled={!userInput.trim()} className="px-8 h-14 rounded-xl">
+            Submit
+          </Button>
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+
+                {/* DISCLAIMER */}
+                <Card className="border-amber-500/40 bg-gradient-to-r from-amber-900/20 to-orange-900/20 backdrop-blur-md shadow-2xl">
+                  <CardHeader className="flex flex-row items-start gap-3 pb-3 p-6">
+                    <Info className="h-6 w-6 text-amber-400 mt-0.5" />
+                    <div>
+                      <CardTitle className="text-lg font-bold text-amber-300">AI Detection Disclaimer</CardTitle>
+                      <p className="text-sm text-amber-200 leading-relaxed mt-1">
+                        This tool <strong>estimates</strong> if code was generated by AI. 
+                        Results are <strong>not 100% accurate</strong> and should <strong>never be used alone</strong> to judge student work. 
+                        Always perform manual code review for fairness and integrity.
+                      </p>
                     </div>
-                  </div>
-                  <div className="border border-teal-500/20 rounded-lg p-4 bg-gray-700/50">
-                    <h3 className="text-lg font-semibold text-teal-400 mb-2">Code Similarity</h3>
-                    <div className="space-y-2">
-                      {error.some((err) => err.includes("Not enough valid submissions")) ? (
-                        <p className="text-red-400 text-center">
-                          {error.find((err) => err.includes("Not enough valid submissions"))}
-                        </p>
-                      ) : similarSubmissions.length === 0 ? (
-                        <p className="text-teal-300 text-center">No similar submissions found.</p>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          <div className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
-                            <h4 className="text-md font-semibold text-teal-400 mb-2">Original Submission</h4>
-                            <AceEditor
-                              mode={language === "cpp" || language === "c" ? "c_cpp" : language}
-                              theme="monokai"
-                              value={code}
-                              name="original-editor"
-                              editorProps={{ $blockScrolling: true }}
-                              setOptions={{
-                                readOnly: true,
-                                showLineNumbers: true,
-                                tabSize: 2,
-                                fontSize: 12,
-                                wrap: true,
-                              }}
-                              style={{ width: "100%", height: "250px" }}
-                            />
-                          </div>
-                          {similarSubmissions.map((sub, index) => (
-                            <div key={index} className="border border-teal-500/20 rounded-lg p-3 bg-gray-800/50">
-                              <h4 className="text-md font-semibold text-teal-400 mb-2">
-                                {sub.student_name} - {sub.file_name} (Similarity: {sub.similarity_percentage?.toFixed(2)}%)
-                              </h4>
-                              <AceEditor
-                                mode={sub.language === "cpp" || sub.language === "c" ? "c_cpp" : sub.language}
-                                theme="monokai"
-                                value={sub.code}
-                                name={`similar-editor-${index}`}
-                                editorProps={{ $blockScrolling: true }}
-                                setOptions={{
-                                  readOnly: true,
-                                  showLineNumbers: true,
-                                  tabSize: 2,
-                                  fontSize: 12,
-                                  wrap: true,
-                                }}
-                                style={{ width: "100%", height: "250px" }}
-                              />
-                            </div>
-                          ))}
+                  </CardHeader>
+                </Card>
+
+                {/* AI RESULT */}
+                <div className="border border-teal-500/30 rounded-2xl p-8 bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm text-center">
+                  <h3 className="text-xl font-semibold text-teal-400 mb-4">AI Code Detection</h3>
+                  {aiError ? (
+                    <p className="text-red-400 text-lg">{aiError}</p>
+                  ) : aiPercentage !== null ? (
+                    <div className="space-y-4">
+                      <p className="text-5xl font-bold">
+                        <span className="text-teal-400">{aiPercentage.toFixed(2)}%</span> AI
+                      </p>
+                      <p className={`text-2xl font-medium ${aiPercentage > 50 ? "text-red-400" : "text-green-400"}`}>
+                        → {aiPercentage > 50 ? "Likely AI-generated" : "Likely human-written"}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-teal-300 text-lg animate-pulse">Analyzing code...</p>
+                  )}
+                </div>
+
+                {/* SIMILARITY */}
+                <div className="border border-teal-500/30 rounded-2xl p-8 bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm">
+                  <h3 className="text-xl font-semibold text-teal-400 mb-6">Code Similarity</h3>
+                  {error.some((err) => err.includes("Not enough")) ? (
+                    <p className="text-red-400 text-center text-lg">{error.find((err) => err.includes("Not enough"))}</p>
+                  ) : similarSubmissions.length === 0 ? (
+                    <p className="text-teal-300 text-center text-lg">No similar submissions found.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      <div className="border border-teal-500/30 rounded-xl p-4 bg-gray-800/50">
+                        <h4 className="text-sm font-semibold text-teal-400 mb-3">Original</h4>
+                        <AceEditor
+                          mode={language === "cpp" || language === "c" ? "c_cpp" : language}
+                          theme="monokai"
+                          value={code}
+                          name="original"
+                          editorProps={{ $blockScrolling: true }}
+                          setOptions={{
+                            readOnly: true,
+                            showLineNumbers: true,
+                            tabSize: 2,
+                            fontSize: 12,
+                            wrap: true,
+                          }}
+                          style={{ width: "100%", height: "280px", borderRadius: "0.75rem" }}
+                        />
+                      </div>
+                      {similarSubmissions.map((sub, i) => (
+                        <div key={i} className="border border-teal-500/30 rounded-xl p-4 bg-gray-800/50">
+                          <h4 className="text-sm font-semibold text-teal-400 mb-3 truncate">
+                            {sub.student_name} ({sub.similarity_percentage?.toFixed(1)}%)
+                          </h4>
+                          <AceEditor
+                            mode={sub.language === "cpp" || sub.language === "c" ? "c_cpp" : sub.language}
+                            theme="monokai"
+                            value={sub.code}
+                            name={`similar-${i}`}
+                            editorProps={{ $blockScrolling: true }}
+                            setOptions={{
+                              readOnly: true,
+                              showLineNumbers: true,
+                              tabSize: 2,
+                              fontSize: 12,
+                              wrap: true,
+                            }}
+                            style={{ width: "100%", height: "280px", borderRadius: "0.75rem" }}
+                          />
                         </div>
-                      )}
+                      ))}
                     </div>
-                  </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

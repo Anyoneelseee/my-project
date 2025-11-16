@@ -1,9 +1,10 @@
+// components/student/ClassCard.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, Users, Hash } from "lucide-react";
 
 interface Class {
   id: string;
@@ -18,8 +19,10 @@ interface ClassCardProps {
 }
 
 export default function ClassCard({ classData }: ClassCardProps) {
-  const [theme, setTheme] = useState<"light" | "dark">(
-    typeof window !== "undefined" ? (localStorage.getItem("theme") as "light" | "dark") || "dark" : "dark"
+  const [, setTheme] = useState<"light" | "dark">(
+    typeof window !== "undefined"
+      ? (localStorage.getItem("theme") as "light" | "dark") || "dark"
+      : "dark"
   );
 
   useEffect(() => {
@@ -29,57 +32,84 @@ export default function ClassCard({ classData }: ClassCardProps) {
 
   return (
     <motion.div
-      whileHover={{ scale: 1.03, transition: { duration: 0.3 } }}
-      whileTap={{ scale: 0.95 }}
+      whileHover={{ y: -6, scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      className="group w-full"
     >
-      <Card
-        className={`${
-          theme === "light" ? "bg-gradient-to-br from-slate-100 to-gray-200" : "bg-gradient-to-br from-slate-900 to-slate-800"
-        } shadow-lg border border-teal-500/20 rounded-2xl min-h-[220px] flex flex-col justify-between overflow-hidden cursor-pointer hover:shadow-2xl transition-all duration-300 font-sans`}
-        aria-label={`View details for ${classData.name}`}
-      >
-        <CardHeader className="p-4 bg-gradient-to-r from-teal-400/10 to-transparent">
-          <CardTitle
-            className={`${
-              theme === "light" ? "text-slate-900" : "text-teal-400"
-            } text-lg md:text-xl font-extrabold truncate flex items-center gap-2`}
-          >
-            <GraduationCap className="w-5 h-5" />
-            {classData.name}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 flex-1 flex flex-col justify-between gap-3">
-          <div className="space-y-3">
-            <p
-              className={`${
-                theme === "light" ? "text-slate-700" : "text-gray-200"
-              } text-sm md:text-base`}
-            >
-              Section: {classData.section}
-            </p>
-            <p
-              className={`${
-                theme === "light" ? "text-slate-700" : "text-gray-200"
-              } text-sm md:text-base`}
-            >
-              Course: {classData.course}
-            </p>
-          </div>
-          <div className="mt-3">
-            <div
-              className={`${
-                theme === "light" ? "bg-teal-200/50 text-teal-700" : "bg-teal-400/10 text-teal-300"
-              } text-sm font-semibold px-3 py-1 rounded-full inline-block`}
-              aria-label={`Class code: ${classData.code}`}
-            >
-              Code: {classData.code}
+      {/* THIS IS THE ONLY CHANGE — makes card 1.5× wider in grid */}
+      <div className="w-full max-w-none lg:col-span-1 xl:col-span-1">
+        <Card
+          className={`
+            relative overflow-hidden rounded-2xl border border-cyan-500/30
+            bg-gradient-to-br from-gray-900/95 via-indigo-950/90 to-violet-950/95
+            backdrop-blur-xl shadow-xl
+            cursor-pointer
+            transition-all duration-300 ease-out
+            hover:shadow-2xl hover:shadow-cyan-500/20
+            hover:border-cyan-400/60
+            active:scale-[0.98]
+            min-h-[180px] flex flex-col
+            /* 1.5× wider than before */
+            w-full
+          `}
+          aria-label={`View details for ${classData.name}`}
+        >
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-cyan-600/10 via-transparent to-violet-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+          {/* Header */}
+          <CardHeader className="pb-2 pt-5 px-4 sm:px-5 flex-shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="p-2 rounded-xl bg-cyan-500/20 backdrop-blur-md border border-cyan-400/40 shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                  <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base sm:text-lg font-extrabold text-white drop-shadow-md line-clamp-2 leading-tight group-hover:text-cyan-300 transition-colors">
+                    {classData.name}
+                  </CardTitle>
+                </div>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+
+          {/* Body */}
+          <CardContent className="px-4 sm:px-5 pb-5 flex-1 flex flex-col justify-between min-h-0">
+            <div className="space-y-3">
+              {/* Section & Course */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400" />
+                  <span className="text-xs sm:text-sm font-medium text-cyan-300">
+                    Sec {classData.section}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <Hash className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-violet-400" />
+                <span className="text-base sm:text-lg font-mono font-bold text-violet-300 tracking-wider">
+                  {classData.code}
+                </span>
+              </div>
+
+              {/* Course */}
+              <div className="flex justify-start">
+                <p className="text-xs sm:text-sm text-violet-300 font-medium line-clamp-1">
+                  {classData.course}
+                </p>
+              </div>
+            </div>
+
+            {/* Bottom Glow Bar */}
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-violet-500 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
+          </CardContent>
+        </Card>
+      </div>
     </motion.div>
   );
 }

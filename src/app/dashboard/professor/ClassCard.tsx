@@ -141,7 +141,7 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
     }
   };
 
-  // === DELETE CLASS VIA RPC ===
+  // === DELETE CLASS ===
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
@@ -207,13 +207,13 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
   return (
     <>
       <motion.div
-        whileHover={{ y: -8, scale: 1.02 }}
+        whileHover={{ y: -6, scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        className="group"
+        className="group w-full"
       >
         <Card
           className="
@@ -225,6 +225,7 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
             hover:shadow-2xl hover:shadow-teal-500/20
             hover:border-teal-400/60
             active:scale-[0.98]
+            min-h-[180px] flex flex-col
           "
           onClick={handleCardClick}
           aria-label={`Open class: ${classData.name}`}
@@ -233,17 +234,17 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
           <div className="absolute inset-0 bg-gradient-to-tr from-teal-600/10 via-transparent to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
           {/* Header */}
-          <CardHeader className="pb-3 pt-6 px-6 relative z-10">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-teal-500/20 backdrop-blur-md border border-teal-400/40 shadow-md group-hover:scale-110 transition-transform duration-300">
-                  <BookOpen className="w-6 h-6 text-teal-300" />
+          <CardHeader className="pb-2 pt-5 px-4 sm:px-5 flex-shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
+                <div className="p-2 rounded-xl bg-teal-500/20 backdrop-blur-md border border-teal-400/40 shadow-md group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-teal-300" />
                 </div>
-                <div>
-                  <h3 className="text-xl font-extrabold text-white drop-shadow-md line-clamp-1 group-hover:text-teal-300 transition-colors">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-base sm:text-lg font-extrabold text-white drop-shadow-md line-clamp-2 leading-tight group-hover:text-teal-300 transition-colors">
                     {classData.name}
                   </h3>
-                  <p className="text-sm text-teal-300 font-medium mt-0.5">
+                  <p className="text-xs sm:text-sm text-teal-300 font-medium mt-0.5 line-clamp-1">
                     {classData.course}
                   </p>
                 </div>
@@ -255,53 +256,55 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
                   e.stopPropagation();
                   setShowDeleteDialog(true);
                 }}
-                className="p-2 rounded-lg bg-red-500/10 backdrop-blur-md border border-red-400/30 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-500/20"
+                className="p-1.5 sm:p-2 rounded-lg bg-red-500/10 backdrop-blur-md border border-red-400/30 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-red-500/20 flex-shrink-0"
                 aria-label="Delete class"
               >
-                <Trash2 className="w-4 h-4 text-red-400" />
+                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
               </button>
             </div>
           </CardHeader>
 
           {/* Body */}
-          <CardContent className="px-6 pb-6 space-y-4">
-            {/* Section & Code */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-teal-400" />
-                <span className="text-sm font-medium text-teal-300">
-                  Section {classData.section}
-                </span>
+          <CardContent className="px-4 sm:px-5 pb-5 flex-1 flex flex-col justify-between min-h-0">
+            <div className="space-y-3">
+              {/* Section & Code */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-400" />
+                  <span className="text-xs sm:text-sm font-medium text-teal-300">
+                    Sec {classData.section}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <Code className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+                  <span className="text-base sm:text-lg font-mono font-bold text-purple-300 tracking-wider">
+                    {classData.code}
+                  </span>
+                  <button
+                    onClick={handleCopyCode}
+                    className="p-1.5 rounded-lg bg-purple-500/20 backdrop-blur-md border border-purple-400/40 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-500/30"
+                    aria-label="Copy class code"
+                  >
+                    {isCopied ? (
+                      <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-300" />
+                    )}
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Code className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-mono font-bold text-purple-300">
-                  {classData.code}
-                </span>
-                <button
-                  onClick={handleCopyCode}
-                  className="ml-1 p-1.5 rounded-lg bg-purple-500/20 backdrop-blur-md border border-purple-400/40 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-500/30"
-                  aria-label="Copy class code"
-                >
-                  {isCopied ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+              {/* Student Count */}
+              <div className="flex justify-end">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-400/40 text-emerald-300 text-xs sm:text-sm font-bold shadow-sm">
+                  <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  {studentCount === null ? (
+                    <span className="w-10 h-3 bg-emerald-400/30 rounded animate-pulse" />
                   ) : (
-                    <Copy className="w-3.5 h-3.5 text-purple-300" />
+                    <>{studentCount} {studentCount === 1 ? "student" : "students"}</>
                   )}
-                </button>
-              </div>
-            </div>
-
-            {/* Student Count */}
-            <div className="flex justify-end">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 backdrop-blur-md border border-emerald-400/40 text-emerald-300 text-xs font-bold shadow-sm">
-                <Users className="w-3.5 h-3.5" />
-                {studentCount === null ? (
-                  <span className="w-8 h-3 bg-emerald-400/30 rounded animate-pulse" />
-                ) : (
-                  <>{studentCount} {studentCount === 1 ? "student" : "students"}</>
-                )}
+                </div>
               </div>
             </div>
 
@@ -311,22 +314,22 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
         </Card>
       </motion.div>
 
-      {/* CONFIRM DELETE DIALOG */}
+      {/* DELETE DIALOG */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="bg-gradient-to-br from-gray-900/95 via-red-950/90 to-gray-900/95 backdrop-blur-xl border border-red-500/30 rounded-2xl shadow-2xl p-6 max-w-md">
+        <AlertDialogContent className="bg-gradient-to-br from-gray-900/95 via-red-950/90 to-gray-900/95 backdrop-blur-xl border border-red-500/30 rounded-2xl shadow-2xl p-6 max-w-sm sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-2xl font-extrabold text-red-400 drop-shadow-md flex items-center gap-2">
-              <AlertTriangle className="w-6 h-6" />
+            <AlertDialogTitle className="text-xl sm:text-2xl font-extrabold text-red-400 drop-shadow-md flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6" />
               Delete Class?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-red-200 mt-2">
-              This will permanently delete <strong>{classData.name}</strong> and all associated data. This action cannot be undone.
+            <AlertDialogDescription className="text-red-200 text-sm sm:text-base mt-2">
+              This will permanently delete <strong className="break-all">{classData.name}</strong> and all associated data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <AlertDialogFooter className="flex gap-3 mt-6">
+          <AlertDialogFooter className="flex gap-2 sm:gap-3 mt-5 sm:mt-6">
             <AlertDialogCancel
-              className="flex-1 border border-gray-600 bg-gray-800/50 text-gray-300 font-medium hover:bg-gray-700 hover:text-gray-100 hover:border-gray-500 transition-all"
+              className="flex-1 border border-gray-600 bg-gray-800/50 text-gray-300 text-sm sm:text-base font-medium hover:bg-gray-700 hover:text-gray-100 hover:border-gray-500 transition-all"
               disabled={isDeleting}
             >
               Cancel
@@ -335,7 +338,7 @@ export function ClassCard({ classData, onClick, onDelete }: ClassCardProps) {
             <AlertDialogAction
               onClick={handleDelete}
               disabled={isDeleting}
-              className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 text-white font-bold shadow-lg shadow-red-500/30 transition-all"
+              className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-400 hover:to-red-500 text-white text-sm sm:text-base font-bold shadow-lg shadow-red-500/30 transition-all"
             >
               {isDeleting ? (
                 <span className="flex items-center gap-2">

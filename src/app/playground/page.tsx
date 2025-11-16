@@ -5,17 +5,23 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-python";
 import "ace-builds/src-noconflict/mode-java";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-monokai";
 import "ace-builds/src-noconflict/ext-language_tools";
-import { PlayIcon } from "@heroicons/react/24/solid";
+import { PlayIcon, PlusIcon, XMarkIcon, PencilIcon, ArrowLeftIcon } from "@heroicons/react/24/solid";
+import { motion, AnimatePresence } from "framer-motion";
 
 const REPLIT_URL = process.env.NEXT_PUBLIC_REPLIT_API_URL || "http://localhost:8080";
-const codeTemplates: Record<string, string> = {
-  python: `import random
+
+const codeTemplates: Record<string, Record<string, string>> = {
+  python: {
+    "main.py": `# Python Rock Paper Scissors
+import random
 
 print("=== Rock Paper Scissors ===")
 while True:
@@ -35,8 +41,9 @@ while True:
     else:
         print("Computer wins!")
     print("-" * 30)`,
-
-  java: `import java.util.*;
+  },
+  java: {
+    "Main.java": `import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -64,8 +71,9 @@ public class Main {
         }
     }
 }`,
-
-  c: `#include <stdio.h>
+  },
+  c: {
+    "main.c": `#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -100,8 +108,9 @@ int main() {
     }
     return 0;
 }`,
-
-  cpp: `#include <iostream>
+  },
+  cpp: {
+    "main.cpp": `#include <iostream>
 #include <string>
 #include <vector>
 #include <random>
@@ -135,15 +144,30 @@ int main() {
         cout << string(30, '-') << endl;
     }
     return 0;
-}`
+}`,
+  },
 };
 
 const aceModes: Record<string, string> = {
-  python: "python",
+  py: "python",
   java: "java",
   c: "c_cpp",
-  cpp: "c_cpp"
+  cpp: "c_cpp",
 };
+
+const langToExt: Record<string, string> = {
+  python: "py",
+  java: "java",
+  c: "c",
+  cpp: "cpp",
+};
+
+interface File {
+  name: string;
+  code: string;
+  language: string;
+  ext: string;
+}
 
 interface ExecutionStep {
   id: number;
@@ -156,16 +180,144 @@ interface ExecutionStep {
 
 const Playground: React.FC = () => {
   const router = useRouter();
-  const [language, setLanguage] = useState("python");
-  const [code, setCode] = useState(codeTemplates.python);
+  const [files, setFiles] = useState<Record<string, File>>({});
+  const [activeFile, setActiveFile] = useState<string>("main.py");
   const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isWaitingForInput, setIsWaitingForInput] = useState(false);
+  const [newFileName, setNewFileName] = useState("");
+  const [showNewFileModal, setShowNewFileModal] = useState(false);
+  const [renamingFile, setRenamingFile] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
+  // Initial load
+  useEffect(() => {
+    const initialLang = "python";
+    const initialFileName = "main.py";
+    const initialFile = codeTemplates[initialLang][initialFileName];
+    setFiles({
+      [initialFileName]: {
+        name: initialFileName,
+        code: initialFile,
+        language: initialLang,
+        ext: "py",
+      },
+    });
+    setActiveFile(initialFileName);
+  }, []);
+
+  const getLanguageFromExt = (ext: string): string => {
+    const extToLang: Record<string, string> = {
+      py: "python",
+      java: "java",
+      c: "c",
+      cpp: "cpp",
+    };
+    return extToLang[ext] || "python";
+  };
+
+  const getExtFromName = (name: string): string => {
+    return name.split(".").pop() || "py";
+  };
+
+  const handleAddFile = () => {
+    setShowNewFileModal(true);
+  };
+
+  const createNewFile = () => {
+    if (!newFileName.trim()) return;
+    const ext = getExtFromName(newFileName);
+    const lang = getLanguageFromExt(ext);
+    const safeName = newFileName.includes(".") ? newFileName : `${newFileName}.${ext}`;
+    if (files[safeName]) {
+      alert("File name already exists!");
+      return;
+    }
+    setFiles(prev => ({
+      ...prev,
+      [safeName]: {
+        name: safeName,
+        code: codeTemplates[lang]?.[safeName] || "// New file",
+        language: lang,
+        ext,
+      },
+    }));
+    setActiveFile(safeName);
+    setNewFileName("");
+    setShowNewFileModal(false);
+  };
+
+const handleRenameFile = (fileName: string) => {
+  setRenamingFile(fileName);
+  setRenameValue(fileName.split('.')[0]); // Start with base name only (no ext)
+};
+
+  const confirmRename = () => {
+  if (!renamingFile || !renameValue.trim()) return;
+  const oldFile = files[renamingFile];
+  const baseName = renameValue.trim().split('.')[0]; // Ignore any user-input ext, take base only
+  const safeNewName = `${baseName}.${oldFile.ext}`; // Always preserve original ext
+  if (files[safeNewName]) {
+    alert("File name already exists!");
+    return;
+  }
+  const newFile: File = { ...oldFile, name: safeNewName }; // ext unchanged
+
+    setFiles(prev => {
+      const newFiles = { ...prev };
+      delete newFiles[renamingFile];
+      newFiles[safeNewName] = newFile;
+      return newFiles;
+    });
+
+    if (activeFile === renamingFile) {
+      setActiveFile(safeNewName);
+    }
+
+    setRenamingFile(null);
+    setRenameValue("");
+  };
+
+  const deleteFile = (fileName: string) => {
+  if (Object.keys(files).length <= 1) return; // Keep at least one file
+  setFiles(prev => {
+    const newFiles = { ...prev };
+    delete newFiles[fileName];
+    if (activeFile === fileName) {
+      const remainingFiles = Object.keys(newFiles); // Use updated newFiles here
+      setActiveFile(remainingFiles[0] || "main.py");
+    }
+    return newFiles;
+  });
+};
+
+  const handleLangChange = (lang: string) => {
+    const ext = langToExt[lang];
+    const fileName = `main.${ext}`;
+    if (!files[fileName]) {
+      const template = codeTemplates[lang]?.[fileName] || `// New ${lang} file`;
+      setFiles(prev => ({
+        ...prev,
+        [fileName]: {
+          name: fileName,
+          code: template,
+          language: lang,
+          ext,
+        },
+      }));
+    }
+    setActiveFile(fileName);
+    handleClear();
+  };
+
+  const currentFile = files[activeFile];
+  const currentCode = currentFile?.code || "";
+  const currentLang = currentFile?.language || "python";
 
   const handleRun = async () => {
-    if (!code.trim()) return;
+    if (!currentCode.trim()) return;
 
     setIsRunning(true);
     setExecutionSteps([]);
@@ -185,7 +337,7 @@ const Playground: React.FC = () => {
       const res = await fetch(`${REPLIT_URL}/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, lang: language }),
+        body: JSON.stringify({ code: currentCode, lang: currentLang }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -224,7 +376,6 @@ const Playground: React.FC = () => {
           const last = prev[prev.length - 1];
           if (!last) return prev;
 
-          // Only update if output changed
           if (data.output === last.output && !data.waiting && !data.done) {
             return prev;
           }
@@ -242,7 +393,7 @@ const Playground: React.FC = () => {
           setTimeout(poll, 100);
         }
       } catch (err) {
-        console.log(err)
+        console.log(err);
         setTimeout(poll, 500);
       }
     };
@@ -254,8 +405,7 @@ const Playground: React.FC = () => {
 
     const inputText = userInput.trim();
 
-    // Only show > input for Python
-    if (language === "python") {
+    if (currentLang === "python") {
       setExecutionSteps(prev => {
         const last = prev[prev.length - 1];
         if (!last) return prev;
@@ -294,16 +444,23 @@ const Playground: React.FC = () => {
   };
 
   const handleSave = () => {
-    const blob = new Blob([code], { type: "text/plain" });
+    const blob = new Blob([currentCode], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `game-${language}-${Date.now()}.${language === "cpp" ? "cpp" : language}`;
+    a.download = currentFile.name;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleReturn = () => router.back();
+
+  const handleCodeChange = (newCode: string) => {
+    setFiles(prev => ({
+      ...prev,
+      [activeFile]: { ...prev[activeFile], code: newCode },
+    }));
+  };
 
   useEffect(() => {
     if (executionSteps.length === 0 && !isRunning) {
@@ -318,148 +475,360 @@ const Playground: React.FC = () => {
     }
   }, [executionSteps, isRunning]);
 
+  const aceMode = aceModes[getExtFromName(activeFile)] || "python";
+
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-gray-200 p-4">
-      <div className="flex justify-start mb-6">
-        <button
-          onClick={handleReturn}
-          className="inline-flex items-center px-4 py-2 bg-gradient-to-br from-teal-500 to-blue-600 text-white font-semibold rounded-lg shadow-md hover:from-teal-600 hover:to-blue-700"
-        >
-          Return
-        </button>
+    <div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+      {/* Premium Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl animate-pulse delay-1000"></div>
       </div>
 
-      <Card className="shadow-lg border-teal-500/20 rounded-xl bg-gradient-to-br from-gray-800 to-gray-900">
-        <CardHeader className="border-b border-gray-600/30">
-          <CardTitle className="text-2xl font-semibold text-teal-400">
-            Multi-Language Playground
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="pt-6">
-          <div className="space-y-6">
-         <div className="flex items-center gap-4 flex-wrap">
-  {/* Language Buttons */}
-  <div className="flex gap-2 flex-wrap">
-    {Object.keys(codeTemplates).map(l => (
-      <Button
-        key={l}
-        onClick={() => {
-          setLanguage(l);
-          setCode(codeTemplates[l]);
-          handleClear();
-        }}
-        variant={language === l ? "default" : "outline"}
-        className="capitalize"
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.6 }}
+        className="flex justify-start mb-8"
       >
-        {l === "cpp" ? "C++" : l}
-      </Button>
-    ))}
-  </div>
+        <Button
+          variant="outline"
+          onClick={handleReturn}
+          className="bg-slate-800/50 backdrop-blur-sm border border-slate-600/50 text-slate-200 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-300 rounded-2xl transition-all hover:scale-105 shadow-md hover:shadow-teal-500/20 font-semibold flex items-center gap-2"
+        >
+          <ArrowLeftIcon className="w-5 h-5" />
+          Back to Dashboard
+        </Button>
+      </motion.div>
 
-  {/* Run Button — Pushed to your desired position */}
-  <div className="ml-102">
-    <Button
-      onClick={handleRun}
-      disabled={isRunning || !code.trim()}
-      className="bg-gradient-to-br from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-medium px-6"
-    >
-      <PlayIcon className="h-5 w-5 mr-2" />
-      {isRunning ? "Running..." : "Run"}
-    </Button>
-  </div>
-</div>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        transition={{ duration: 0.6, delay: 0.1 }}
+      >
+        <Card className="shadow-2xl border border-teal-500/20 rounded-3xl bg-slate-800/60 backdrop-blur-2xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border-b border-teal-500/20 p-6">
+            <CardTitle className="text-3xl font-bold text-teal-400 tracking-tight flex items-center gap-3">
+              <PlayIcon className="w-8 h-8" />
+              Premium Code Playground
+            </CardTitle>
+          </CardHeader>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <Label className="text-sm font-medium text-gray-200">Code Editor</Label>
-                <AceEditor
-                  mode={aceModes[language]}
-                  theme="monokai"
-                  value={code}
-                  onChange={setCode}
-                  name="code-editor"
-                  editorProps={{ $blockScrolling: true }}
-                  setOptions={{
-                    enableBasicAutocompletion: true,
-                    enableLiveAutocompletion: true,
-                    showLineNumbers: true,
-                    tabSize: language === "java" ? 4 : 2,
-                    fontSize: 14,
-                  }}
-                  style={{ width: "100%", height: "500px", borderRadius: "8px" }}
-                  readOnly={isRunning}
-                />
-
-                <div className="flex gap-4 mt-4">
-                  <Button onClick={handleSave} disabled={isRunning} className="w-1/3 bg-gray-700/50 hover:bg-gray-600 text-gray-200">
-                    Save
-                  </Button>
-                  <Button onClick={handleClear} disabled={isRunning} className="w-1/3 bg-gray-700/50 hover:bg-gray-600 text-gray-200">
-                    Clear
-                  </Button>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium text-gray-200">Console</Label>
-                <div className="p-2 border border-gray-600 rounded-lg bg-gray-900">
-                  <pre
-                    className="text-gray-200 whitespace-pre-wrap text-sm font-mono"
-                    style={{ minHeight: "400px", maxHeight: "400px", overflowY: "auto" }}
-                  >
-                    {executionSteps.length === 1 && executionSteps[0].status === "Ready" && (
-                      <span className="text-gray-400">Click Run to execute...</span>
-                    )}
-
-                    {executionSteps.map((step, i) => (
-                      <div key={i}>
-                        {step.error && <div className="text-red-400">{step.error}</div>}
-                        {step.output && <div className="text-green-400">{step.output}</div>}
-                        
-                        {/* Show > input ONLY for Python */}
-                        {language === "python" && step.inputsSoFar.slice(
-                          i === 0 ? 0 : executionSteps[i-1]?.inputsSoFar.length || 0
-                        ).map((inp, j) => (
-                          <div key={j} className="text-blue-400">&gt; {inp}</div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {isRunning && !isWaitingForInput && <div className="text-yellow-400">[Running...]</div>}
-                  </pre>
-
-                  {isWaitingForInput && (
-                    <div className="flex gap-2 mt-2">
-                      <input
-                        type="text"
-                        value={userInput}
-                        onChange={(e) => setUserInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && userInput.trim()) {
-                            e.preventDefault();
-                            handleInputSubmit();
-                          }
-                        }}
-                        className="flex-1 p-2 border border-gray-600 rounded-lg text-gray-200 bg-gray-700/50 focus:ring-2 focus:ring-teal-500"
-                        placeholder="Enter input..."
-                        autoFocus
-                      />
+          <CardContent className="p-6 pt-0">
+            <div className="space-y-8">
+              {/* Language Buttons and Add File */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="flex items-center gap-4 flex-wrap"
+              >
+                <div className="flex gap-2 flex-wrap">
+                  {Object.keys(codeTemplates).map((l) => (
+                    <motion.div key={l}>
                       <Button
-                        onClick={handleInputSubmit}
-                        disabled={!userInput.trim()}
-                        className="bg-teal-500 hover:bg-teal-600 text-white"
+                        onClick={() => handleLangChange(l)}
+                        variant={currentLang === l ? "default" : "outline"}
+                        className={`capitalize rounded-xl px-4 py-2 font-semibold transition-all hover:scale-105 ${
+                          currentLang === l
+                            ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/25"
+                            : "bg-slate-700/50 border-slate-600/50 text-slate-200 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-300"
+                        }`}
                       >
-                        Submit
+                        {l === "cpp" ? "C++" : l.charAt(0).toUpperCase() + l.slice(1)}
                       </Button>
-                    </div>
-                  )}
+                    </motion.div>
+                  ))}
                 </div>
+                <motion.div whileHover={{ scale: 1.05 }}>
+                  <Button
+                    onClick={handleAddFile}
+                    variant="outline"
+                    className="ml-auto bg-slate-700/50 border-slate-600/50 text-slate-200 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-300 rounded-xl transition-all font-semibold flex items-center gap-2"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add File
+                  </Button>
+                </motion.div>
+              </motion.div>
+
+              {/* File Tabs */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="flex border-b border-slate-600/30 pb-4 bg-slate-900/50 rounded-2xl p-4"
+              >
+                {Object.entries(files).map(([fileName]) => {
+                  const isActive = activeFile === fileName;
+                  const isRenaming = renamingFile === fileName;
+                  return (
+                    <motion.div
+                      key={fileName}
+                      className={`flex items-center mr-3 rounded-xl p-2 transition-all ${
+                        isActive
+                          ? "bg-gradient-to-r from-teal-500/10 to-cyan-500/10 border border-teal-500/30 shadow-md shadow-teal-500/10"
+                          : "bg-slate-800/50 border border-slate-600/30 hover:bg-slate-700/50"
+                      }`}
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      {isRenaming ? (
+                        <Input
+                          value={renameValue}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setRenameValue(e.target.value)
+                          }
+                          onBlur={confirmRename}
+                          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                            if (e.key === 'Enter') confirmRename();
+                            if (e.key === 'Escape') {
+                              setRenamingFile(null);
+                              setRenameValue("");
+                            }
+                          }}
+                          className="h-9 text-sm bg-transparent border-0 border-b border-slate-400/50 focus:border-teal-400 text-slate-100"
+                          autoFocus
+                        />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          onClick={() => setActiveFile(fileName)}
+                          className={`h-9 px-4 py-2 text-sm capitalize font-medium transition-all ${
+                            isActive
+                              ? "text-teal-300"
+                              : "text-slate-300 hover:text-slate-100"
+                          }`}
+                        >
+                          {fileName}
+                        </Button>
+                      )}
+                      <motion.div whileHover={{ scale: 1.1 }}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRenameFile(fileName)}
+                          className="h-9 w-8 p-0 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 rounded-lg transition-all"
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                      <motion.div whileHover={{ scale: 1.1 }}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteFile(fileName)}
+                          className="h-9 w-8 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </motion.div>
+                  );
+                })}
+              </motion.div>
+
+              {/* Run Button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                className="flex justify-end"
+              >
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.98 }}>
+                  <Button
+                    onClick={handleRun}
+                    disabled={isRunning || !currentCode.trim()}
+                    className={`bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-semibold px-8 py-3 rounded-2xl shadow-lg shadow-teal-500/25 hover:shadow-teal-500/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
+                      isRunning ? "animate-pulse" : ""
+                    }`}
+                  >
+                    <PlayIcon className="h-5 w-5" />
+                    {isRunning ? "Running..." : "Execute Code"}
+                  </Button>
+                </motion.div>
+              </motion.div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.5 }}
+                  className="lg:col-span-2"
+                >
+                  <Label className="text-base font-semibold text-slate-200 mb-3 block">
+                    Code Editor - {currentFile?.name}
+                  </Label>
+                  <div className="bg-slate-900/80 border border-slate-600/30 rounded-2xl overflow-hidden shadow-lg shadow-slate-900/50">
+                    <AceEditor
+                      mode={aceMode}
+                      theme="monokai"
+                      value={currentCode}
+                      onChange={handleCodeChange}
+                      name="code-editor"
+                      editorProps={{ $blockScrolling: true }}
+                      setOptions={{
+                        enableBasicAutocompletion: true,
+                        enableLiveAutocompletion: true,
+                        showLineNumbers: true,
+                        tabSize: currentLang === "java" ? 4 : 2,
+                        fontSize: 14,
+                      }}
+                      style={{ width: "100%", height: "500px", borderRadius: "0" }}
+                      readOnly={isRunning}
+                    />
+                  </div>
+
+                  <div className="flex gap-4 mt-6">
+                    <motion.div whileHover={{ scale: 1.05 }}>
+                      <Button
+                        onClick={handleSave}
+                        disabled={isRunning}
+                        className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-200 rounded-xl transition-all font-medium shadow-md hover:shadow-slate-500/20 disabled:opacity-50"
+                      >
+                        Save File
+                      </Button>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.05 }}>
+                      <Button
+                        onClick={handleClear}
+                        disabled={isRunning}
+                        className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-200 rounded-xl transition-all font-medium shadow-md hover:shadow-slate-500/20 disabled:opacity-50"
+                      >
+                        Clear Console
+                      </Button>
+                    </motion.div>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.6 }}
+                >
+                  <Label className="text-base font-semibold text-slate-200 mb-3 block">
+                    Execution Console
+                  </Label>
+                  <div className="bg-slate-900/80 border border-slate-600/30 rounded-2xl overflow-hidden shadow-lg shadow-slate-900/50">
+                    <div className="p-4 bg-slate-950/50 border-b border-slate-600/30">
+                      <pre
+                        className="text-slate-200 whitespace-pre-wrap text-sm font-mono"
+                        style={{ minHeight: "350px", maxHeight: "350px", overflowY: "auto" }}
+                      >
+                        {executionSteps.length === 1 && executionSteps[0].status === "Ready" && (
+                          <span className="text-slate-400 italic">Ready to execute {currentFile?.name}...</span>
+                        )}
+
+                        {executionSteps.map((step, i) => (
+                          <div key={i} className="mb-2">
+                            {step.error && <div className="text-red-400 font-semibold">{step.error}</div>}
+                            {step.output && <div className="text-emerald-400">{step.output}</div>}
+                            
+                            {currentLang === "python" && step.inputsSoFar.slice(
+                              i === 0 ? 0 : executionSteps[i-1]?.inputsSoFar.length || 0
+                            ).map((inp, j) => (
+                              <div key={j} className="text-cyan-400">&gt; {inp}</div>
+                            ))}
+                          </div>
+                        ))}
+
+                        {isRunning && !isWaitingForInput && <div className="text-amber-400 font-semibold">[Executing...]</div>}
+                      </pre>
+                    </div>
+
+                    {isWaitingForInput && (
+                      <div className="p-4 bg-slate-950/50">
+                        <div className="flex gap-3">
+                          <Input
+                            type="text"
+                            value={userInput}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserInput(e.target.value)}
+                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                              if (e.key === "Enter" && userInput.trim()) {
+                                e.preventDefault();
+                                handleInputSubmit();
+                              }
+                            }}
+                            className="flex-1 bg-slate-800/50 border-slate-600/50 text-slate-100 placeholder-slate-400 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                            placeholder="Enter input..."
+                            autoFocus
+                          />
+                          <Button
+                            onClick={handleInputSubmit}
+                            disabled={!userInput.trim()}
+                            className="bg-teal-500 hover:bg-teal-600 text-white font-medium px-6 rounded-xl transition-all disabled:opacity-50"
+                          >
+                            Submit
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* New File Modal */}
+      <AnimatePresence>
+        {showNewFileModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-slate-800/95 backdrop-blur-2xl rounded-2xl p-8 w-full max-w-md border border-teal-500/20 shadow-2xl shadow-teal-500/10"
+            >
+              <h3 className="text-xl font-bold text-teal-400 mb-6">Create New File</h3>
+              <Input
+                value={newFileName}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setNewFileName(e.target.value)
+                }
+                placeholder="File name (e.g., utils.py)"
+                className="mb-4 bg-slate-700/50 border-slate-600/50 text-slate-100 placeholder-slate-400 focus:ring-teal-500 focus:border-teal-500 transition-all"
+              />
+              <Select onValueChange={(ext) => {
+                if (!newFileName.includes('.')) {
+                  setNewFileName(`${newFileName}.${ext}`);
+                }
+              }}>
+                <SelectTrigger className="mb-6 bg-slate-700/50 border-slate-600/50 text-slate-100">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800/95 text-slate-100 border-teal-500/20">
+                  <SelectItem value="py" className="hover:bg-teal-500/10">Python</SelectItem>
+                  <SelectItem value="java" className="hover:bg-teal-500/10">Java</SelectItem>
+                  <SelectItem value="c" className="hover:bg-teal-500/10">C</SelectItem>
+                  <SelectItem value="cpp" className="hover:bg-teal-500/10">C++</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNewFileModal(false)}
+                  className="bg-slate-700/50 border-slate-600/50 text-slate-200 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-300 transition-all"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={createNewFile}
+                  disabled={!newFileName.trim()}
+                  className="bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-semibold px-6 rounded-xl shadow-md shadow-teal-500/25 hover:shadow-teal-500/40 transition-all disabled:opacity-50"
+                >
+                  Create
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -1,10 +1,6 @@
 "use client";
 
-// app/dashboard/professor/[classId]/page.tsx
-// Tabbed layout for Overview, Enrolled Students, and Activities with submissions dialog
-
 import { useParams, useRouter } from "next/navigation";
-import type { Session, AuthError } from "@supabase/supabase-js";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { getUserRole } from "@/lib/auth";
@@ -32,12 +28,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { CreateActivityDialog } from "../CreateActivityDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Book, CheckCircle, Code } from "lucide-react";
 import { ActivityCard } from "../ActivityCard";
+import { CheckCircle } from "lucide-react"; // RESTORED
 
 interface Class {
-  professorEmail: string;
-  professorName: string;
   id: string;
   name: string;
   section: string;
@@ -70,7 +64,7 @@ interface Submission {
   submitted_at: string;
   activity_id: string;
   student_name?: string;
-  is_viewed: boolean;
+  is_viewed: boolean; // RESTORED
 }
 
 export default function ClassDetailsPage() {
@@ -78,6 +72,7 @@ export default function ClassDetailsPage() {
   const router = useRouter();
 
   const [classData, setClassData] = useState<Class | null>(null);
+  const [allClasses, setAllClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -89,7 +84,6 @@ export default function ClassDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "activities">("overview");
 
-  // Initialize data fetching and auth
   useEffect(() => {
     const initialize = async () => {
       setIsLoading(true);
@@ -103,23 +97,21 @@ export default function ClassDetailsPage() {
 
         const proceedWithSession = async () => {
           try {
-            let session: Session | null = null;
-            let sessionError: AuthError | null = null;
+            let session = null;
             for (let attempt = 0; attempt < 3; attempt++) {
-              const result = await supabase.auth.getSession();
-              session = result.data.session;
-              sessionError = result.error;
+              const { data } = await supabase.auth.getSession();
+              session = data?.session;
               if (session) break;
               await new Promise((resolve) => setTimeout(resolve, 500));
             }
 
-            if (sessionError || !session) {
+            if (!session) {
               router.push("/login");
               return;
             }
 
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
               router.push("/login");
               return;
             }
@@ -138,6 +130,16 @@ export default function ClassDetailsPage() {
 
             const normalizedClassId = String(classId);
 
+            // FETCH ALL CLASSES
+            const { data: allData, error: allError } = await supabase.rpc("get_professor_classes");
+            if (!allError && Array.isArray(allData)) {
+              const validated = allData.filter(
+                (c): c is Class => c && typeof c.id === "string" && typeof c.name === "string"
+              );
+              setAllClasses(validated);
+            }
+
+            // FETCH CURRENT CLASS
             const { data: classDataArray, error: classError } = await supabase
               .rpc("get_professor_classes")
               .eq("id", normalizedClassId);
@@ -147,37 +149,29 @@ export default function ClassDetailsPage() {
               return;
             }
 
-            const classData = classDataArray[0] as Class;
-            setClassData(classData);
+            setClassData(classDataArray[0] as Class);
 
+            // FETCH STUDENTS
             const { data: studentsData, error: studentsError } = await supabase
               .rpc("get_class_student_profiles", { class_id_input: normalizedClassId });
+            setStudents(studentsError ? [] : (studentsData as Student[]) || []);
 
-            if (studentsError) {
-              setStudents([]);
-            } else {
-              setStudents((studentsData as Student[]) || []);
-            }
-
+            // FETCH ACTIVITIES
             const { data: activitiesData, error: activitiesError } = await supabase
               .from("activities")
               .select("*")
               .eq("class_id", normalizedClassId)
               .order("created_at", { ascending: false });
 
-            if (activitiesError) {
-              setActivities([]);
-            } else {
-              setActivities(activitiesData || []);
+            if (!activitiesError && activitiesData) {
+              setActivities(activitiesData);
               const fetchSignedUrls = async () => {
-                const urlPromises = (activitiesData || []).map(async (activity) => {
+                const urlPromises = activitiesData.map(async (activity) => {
                   if (activity.image_url && !activity.image_url.includes("null")) {
-                    const filePath = activity.image_url as string;
                     const { data, error } = await supabase.storage
                       .from("activity-images")
-                      .createSignedUrl(filePath, 3600);
-                    if (error) return { id: activity.id, url: "" };
-                    return { id: activity.id, url: data.signedUrl || "" };
+                      .createSignedUrl(activity.image_url as string, 3600);
+                    return { id: activity.id, url: error ? "" : data?.signedUrl || "" };
                   }
                   return { id: activity.id, url: "" };
                 });
@@ -188,33 +182,35 @@ export default function ClassDetailsPage() {
               await fetchSignedUrls();
             }
 
+            // FETCH SUBMISSIONS WITH is_viewed
             const { data: submissionsData, error: submissionsError } = await supabase
               .from("submissions")
               .select("*, is_viewed")
               .eq("class_id", normalizedClassId);
 
             if (submissionsError) {
-              setError(`Failed to fetch submissions: ${submissionsError.message}`);
               setSubmissions([]);
               setOptimisticSubmissions([]);
             } else {
-              const submissionsWithNames = await Promise.all((submissionsData || []).map(async (submission) => {
-                const student = (students || []).find((s) => s.student_id === submission.student_id);
-                let studentName = "Unknown Student";
-                if (student) {
-                  studentName = `${student.first_name} ${student.last_name}`.trim();
-                } else {
-                  const { data: userData, error: userError } = await supabase
-                    .from("users")
-                    .select("first_name, last_name")
-                    .eq("id", submission.student_id)
-                    .single();
-                  if (!userError && userData) {
-                    studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+              const submissionsWithNames = await Promise.all(
+                (submissionsData || []).map(async (submission) => {
+                  const student = students.find((s) => s.student_id === submission.student_id);
+                  let studentName = "Unknown Student";
+                  if (student) {
+                    studentName = `${student.first_name} ${student.last_name}`.trim();
+                  } else {
+                    const { data: userData } = await supabase
+                      .from("users")
+                      .select("first_name, last_name")
+                      .eq("id", submission.student_id)
+                      .single();
+                    if (userData) {
+                      studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+                    }
                   }
-                }
-                return { ...submission, student_name: studentName } as Submission;
-              }));
+                  return { ...submission, student_name: studentName } as Submission;
+                })
+              );
               setSubmissions(submissionsWithNames);
               setOptimisticSubmissions(submissionsWithNames);
             }
@@ -234,12 +230,10 @@ export default function ClassDetailsPage() {
     initialize();
   }, [classId, router]);
 
-  // Sync optimistic submissions with fetched submissions
   useEffect(() => {
     setOptimisticSubmissions(submissions);
   }, [submissions]);
 
-  // Handle activity creation and refresh submissions
   const handleActivityCreated = async () => {
     const { data, error } = await supabase
       .from("activities")
@@ -254,12 +248,10 @@ export default function ClassDetailsPage() {
       const fetchSignedUrls = async () => {
         const urlPromises = (data || []).map(async (activity) => {
           if (activity.image_url && !activity.image_url.includes("null")) {
-            const filePath = activity.image_url as string;
             const { data, error } = await supabase.storage
               .from("activity-images")
-              .createSignedUrl(filePath, 3600);
-            if (error) return { id: activity.id, url: "" };
-            return { id: activity.id, url: data.signedUrl || "" };
+              .createSignedUrl(activity.image_url as string, 3600);
+            return { id: activity.id, url: error ? "" : data?.signedUrl || "" };
           }
           return { id: activity.id, url: "" };
         });
@@ -279,57 +271,53 @@ export default function ClassDetailsPage() {
       setSubmissions([]);
       setOptimisticSubmissions([]);
     } else {
-      const submissionsWithNames = await Promise.all((submissionsData || []).map(async (submission) => {
-        const student = (students || []).find((s) => s.student_id === submission.student_id);
-        let studentName = "Unknown Student";
-        if (student) {
-          studentName = `${student.first_name} ${student.last_name}`.trim();
-        } else {
-          const { data: userData, error: userError } = await supabase
-            .from("users")
-            .select("first_name, last_name")
-            .eq("id", submission.student_id)
-            .single();
-          if (!userError && userData) {
-            studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+      const submissionsWithNames = await Promise.all(
+        (submissionsData || []).map(async (submission) => {
+          const student = students.find((s) => s.student_id === submission.student_id);
+          let studentName = "Unknown Student";
+          if (student) {
+            studentName = `${student.first_name} ${student.last_name}`.trim();
+          } else {
+            const { data: userData } = await supabase
+              .from("users")
+              .select("first_name, last_name")
+              .eq("id", submission.student_id)
+              .single();
+            if (userData) {
+              studentName = `${userData.first_name} ${userData.last_name}`.trim() || "Unknown Student";
+            }
           }
-        }
-        return { ...submission, student_name: studentName } as Submission;
-      }));
+          return { ...submission, student_name: studentName } as Submission;
+        })
+      );
       setSubmissions(submissionsWithNames);
       setOptimisticSubmissions(submissionsWithNames);
     }
   };
 
-  // Refresh activities and submissions when dialog closes
   useEffect(() => {
-    if (isActivityDialogOpen) return; // avoid refresh while creating
+    if (isActivityDialogOpen) return;
     handleActivityCreated();
   }, [classId, students, isActivityDialogOpen]);
 
-  // Mark submission as viewed
+  // RESTORED: Mark as Viewed
   const markSubmissionViewed = async (submissionId: string) => {
     const { error } = await supabase
       .from("submissions")
       .update({ is_viewed: true })
       .eq("id", submissionId);
-    if (error) {
-      console.error("Failed to mark viewed:", error.message);
-      return false;
-    }
-    return true;
+    return !error;
   };
 
-  // Handle submission click with automatic view marking
   const handleSubmissionClick = async (submission: Submission) => {
     if (!submission.is_viewed) {
       const newSubmissions = optimisticSubmissions.map((s) =>
         s.id === submission.id ? { ...s, is_viewed: true } : s
       );
-      setOptimisticSubmissions(newSubmissions); // Optimistic update
+      setOptimisticSubmissions(newSubmissions);
       const success = await markSubmissionViewed(submission.id);
       if (!success) {
-        setOptimisticSubmissions(submissions); // Rollback on error
+        setOptimisticSubmissions(submissions);
         toast.error("Failed to mark as viewed. Please try again.");
       } else {
         toast.success("Mark as Viewed.");
@@ -342,54 +330,37 @@ export default function ClassDetailsPage() {
     );
   };
 
-  if (isLoading)
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
-        Loading...
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
+        <div className="text-xl font-semibold text-teal-300">Loading...</div>
       </div>
     );
+  }
 
-  if (error)
+  if (error || !classData) {
     return (
-      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
-        {error}
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 text-teal-300">
+        {error || "Class not found."}
       </div>
     );
-
-  if (!classData)
-    return (
-      <div className="flex items-center justify-center h-screen text-teal-300 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900">
-        Class not found.
-      </div>
-    );
+  }
 
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
   const selectedSubmissions = optimisticSubmissions.filter((sub) => sub.activity_id === selectedActivityId);
 
   return (
     <SidebarProvider>
-      <ProfessorSidebar
-        classes={[
-          {
-            id: classId as string,
-            name: classData.name,
-            section: classData.section,
-            course: classData.course,
-            code: classData.code,
-          },
-        ]}
-      />
+      <ProfessorSidebar classes={allClasses} />
+
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
+        <header className="flex h-16 items-center gap-2 px-4 border-b border-teal-500/20 bg-gradient-to-br from-gray-800 to-gray-900">
           <SidebarTrigger className="hover:bg-teal-500/20 p-2 rounded-lg transition-colors text-teal-400" />
           <Separator orientation="vertical" className="mr-2 h-4 bg-teal-500/20" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink
-                  href="/dashboard/professor"
-                  className="text-teal-300 hover:text-teal-400 text-sm font-medium transition-colors"
-                >
+                <BreadcrumbLink href="/dashboard/professor" className="text-teal-300 hover:text-teal-400 text-sm font-medium">
                   Professor Dashboard
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -403,125 +374,84 @@ export default function ClassDetailsPage() {
           </Breadcrumb>
         </header>
 
-        <main className="flex-1 p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
+        <main className="p-6 bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 min-h-screen">
           <div className="max-w-7xl mx-auto space-y-6">
-            {/* Tabs */}
-            <div className="flex space-x-4 border-b border-teal-500/20 mb-4">
-              <button
-                onClick={() => setActiveTab("overview")}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
-                  activeTab === "overview"
-                    ? "bg-gray-800 text-teal-400 border-b-2 border-teal-400"
-                    : "text-teal-300 hover:text-teal-400"
-                }`}
-              >
-                Create Activity
-              </button>
-              <button
-                onClick={() => setActiveTab("students")}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
-                  activeTab === "students"
-                    ? "bg-gray-800 text-teal-400 border-b-2 border-teal-400"
-                    : "text-teal-300 hover:text-teal-400"
-                }`}
-              >
-                Enrolled Students
-              </button>
-              <button
-                onClick={() => setActiveTab("activities")}
-                className={`px-4 py-2 text-sm font-medium rounded-t-lg ${
-                  activeTab === "activities"
-                    ? "bg-gray-800 text-teal-400 border-b-2 border-teal-400"
-                    : "text-teal-300 hover:text-teal-400"
-                }`}
-              >
-                Activities
-              </button>
+
+            {/* PREMIUM TABS */}
+            <div className="flex space-x-1 p-1 bg-gray-800/50 rounded-xl border border-teal-500/20">
+              {["overview", "students", "activities"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab as never)}
+                  className={`flex-1 px-5 py-3 rounded-lg font-medium text-sm transition-all ${
+                    activeTab === tab
+                      ? "bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg"
+                      : "text-teal-300 hover:text-teal-200"
+                  }`}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
             </div>
 
-{/* Overview */}
-{activeTab === "overview" && (
-  <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-    <CardHeader className="border-b border-teal-500/20 py-4">
-      <CardTitle className="text-2xl md:text-3xl font-semibold text-teal-400">
-        {classData.name}
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="pt-6 space-y-6">
-      <div className="space-y-3">
-             <Button
-        onClick={() => setIsActivityDialogOpen(true)}
-        className="w-full sm:w-auto bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-600 hover:to-blue-700 text-white font-semibold rounded-lg px-8 py-3 transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 focus:ring-2 focus:ring-teal-400 focus:ring-opacity-50"
-      >
-        Create Activity
-      </Button>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-700/50">
-          <Book className="w-5 h-5 text-teal-300" />
-          <div>
-            <p className="text-sm font-medium text-teal-300">Course</p>
-            <p className="text-lg font-semibold text-teal-400">{classData.course}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-700/50">
-          <Book className="w-5 h-5 text-teal-300" />
-          <div>
-            <p className="text-sm font-medium text-teal-300">Section</p>
-            <p className="text-lg font-semibold text-teal-400">{classData.section}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-teal-500/30">
-          <Code className="w-5 h-5 text-teal-300" />
-          <div>
-            <p className="text-sm font-medium text-teal-300">Class Code</p>
-            <p className="text-lg font-semibold text-teal-400">{classData.code}</p>
-          </div>
-        </div>
-      </div>
-  
-    </CardContent>
-  </Card>
-)}
+            {/* OVERVIEW */}
+            {activeTab === "overview" && (
+              <Card className="border-teal-500/20 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-md shadow-xl">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-3xl font-bold text-teal-400">{classData.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <Button
+                    onClick={() => setIsActivityDialogOpen(true)}
+                    className="w-full h-14 text-lg font-bold bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 shadow-lg"
+                  >
+                    Create Activity
+                  </Button>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl bg-gray-700/50 border border-teal-500/20">
+                      <p className="text-sm text-teal-300">Course</p>
+                      <p className="text-xl font-bold text-teal-400">{classData.course}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-gray-700/50 border border-teal-500/20">
+                      <p className="text-sm text-teal-300">Section</p>
+                      <p className="text-xl font-bold text-teal-400">{classData.section}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-teal-500/20 border border-teal-400/50">
+                      <p className="text-sm text-teal-300">Class Code</p>
+                      <p className="text-xl font-bold text-teal-400 font-mono">{classData.code}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Students */}
+            {/* STUDENTS */}
             {activeTab === "students" && (
-              <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-                <CardHeader className="border-b border-teal-500/20">
-                  <CardTitle className="text-xl font-semibold text-teal-400">
-                    Enrolled Students
+              <Card className="border-teal-500/20 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-md shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-teal-400">
+                    Enrolled Students ({students.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-4">
+                <CardContent>
                   {students.length === 0 ? (
-                    <div className="flex items-center justify-center py-8 bg-gray-700/50 rounded-lg border border-teal-500/20">
-                      <p className="text-teal-300 text-lg font-medium">No students have joined this class.</p>
-                    </div>
+                    <p className="text-center py-8 text-teal-300">No students enrolled.</p>
                   ) : (
-                    <div className="overflow-x-auto rounded-lg border border-teal-500/20 bg-gradient-to-br from-gray-800/90 to-gray-900/90">
-                      <Table className="w-full">
-                        <TableHeader className="sticky top-0 bg-gradient-to-r from-gray-800 to-gray-900 shadow-sm z-10">
-                          <TableRow className="border-teal-500/20">
-                            <TableHead className="text-teal-300 font-semibold px-4 py-3">First Name</TableHead>
-                            <TableHead className="text-teal-300 font-semibold px-4 py-3">Last Name</TableHead>
-                            <TableHead className="text-teal-300 font-semibold px-4 py-3">Section</TableHead>
+                    <div className="overflow-x-auto rounded-xl border border-teal-500/20">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-gradient-to-r from-gray-800 to-gray-900">
+                            <TableHead className="text-teal-300 font-bold">Name</TableHead>
+                            <TableHead className="text-teal-300 font-bold">Section</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {students.map((student, index) => (
-                            <TableRow
-                              key={student.student_id}
-                              className={`border-teal-500/20 transition-colors ${
-                                index % 2 === 0 ? "bg-gray-700/30" : "bg-transparent"
-                              } hover:bg-gray-600/50`}
-                            >
-                              <TableCell className="text-teal-400 font-medium px-4 py-3 truncate max-w-[200px]">
-                                {student.first_name}
+                          {students.map((s) => (
+                            <TableRow key={s.student_id} className="hover:bg-gray-700/30">
+                              <TableCell className="font-medium text-teal-400">
+                                {s.first_name} {s.last_name}
                               </TableCell>
-                              <TableCell className="text-teal-400 font-medium px-4 py-3 truncate max-w-[200px]">
-                                {student.last_name}
-                              </TableCell>
-                              <TableCell className="text-teal-300 px-4 py-3">
-                                {student.section}
-                              </TableCell>
+                              <TableCell className="text-teal-300">{s.section}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -532,26 +462,25 @@ export default function ClassDetailsPage() {
               </Card>
             )}
 
-            {/* Activities */}
+            {/* ACTIVITIES */}
             {activeTab === "activities" && (
-              <Card className="border-teal-500/20 shadow-lg bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl">
-                <CardHeader className="border-b border-teal-500/20">
-                  <CardTitle className="text-xl font-semibold text-teal-400">
-                    Activities
+              <Card className="border-teal-500/20 bg-gradient-to-br from-gray-800/60 to-gray-900/60 backdrop-blur-md shadow-xl">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-bold text-teal-400">
+                    Activities ({activities.length})
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-4">
+                <CardContent>
                   {activities.length === 0 ? (
-                    <p className="text-teal-300 text-center">No activities created yet.</p>
+                    <p className="text-center py-8 text-teal-300">No activities created yet.</p>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                       {activities.map((activity) => (
                         <ActivityCard
                           key={activity.id}
                           activity={activity}
                           signedUrl={signedUrls[activity.id] || ""}
                           onClick={() => setSelectedActivityId(activity.id)}
- 
                         />
                       ))}
                     </div>
@@ -561,7 +490,6 @@ export default function ClassDetailsPage() {
             )}
           </div>
 
-          {/* Create Activity Dialog */}
           <CreateActivityDialog
             classId={classId as string}
             isOpen={isActivityDialogOpen}
@@ -569,38 +497,34 @@ export default function ClassDetailsPage() {
             onActivityCreated={handleActivityCreated}
           />
 
-          {/* Submissions Modal */}
+          {/* RESTORED: Submission Dialog with CheckCircle */}
           <Dialog open={!!selectedActivityId} onOpenChange={() => setSelectedActivityId(null)}>
-            <DialogContent className="sm:max-w-[425px] md:max-w-[600px] bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 text-teal-300">
+            <DialogContent className="sm:max-w-[600px] bg-gradient-to-br from-gray-800 to-gray-900 border-teal-500/20 text-teal-300">
               <DialogHeader>
-                <DialogTitle className="text-teal-400">
-                  Submissions for {selectedActivity?.title || "Untitled Activity"}
+                <DialogTitle className="text-xl font-bold text-teal-400">
+                  Submissions: {selectedActivity?.title}
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
                 {selectedSubmissions.length === 0 ? (
-                  <p className="text-teal-300 text-center">No submissions yet.</p>
+                  <p className="text-center py-8">No submissions yet.</p>
                 ) : (
-                  selectedSubmissions.map((submission) => (
+                  selectedSubmissions.map((sub) => (
                     <div
-                      key={`${submission.student_id}-${submission.file_name}`}
-                      className="border border-teal-500/20 rounded-lg p-3 bg-gray-700/50 hover:bg-gray-600/50 transition-colors flex items-center justify-between"
+                      key={sub.id}
+                      onClick={() => handleSubmissionClick(sub)}
+                      className="p-4 rounded-xl bg-gray-700/50 border border-teal-500/20 hover:bg-gray-600/50 cursor-pointer transition-all flex items-center justify-between"
                     >
-                      <div
-                        onClick={() => handleSubmissionClick(submission)}
-                        className="flex-1 cursor-pointer"
-                      >
-                        <p className="font-semibold text-teal-400">{submission.student_name}</p>
-                        <p className="text-sm text-teal-300">File: {submission.file_name}</p>
-                        <p className="text-sm text-teal-300">
-                          Submitted: {new Date(submission.submitted_at).toLocaleString()}
+                      <div>
+                        <p className="font-bold text-teal-400">{sub.student_name}</p>
+                        <p className="text-sm text-teal-300">File: {sub.file_name}</p>
+                        <p className="text-xs text-teal-400">
+                          {new Date(sub.submitted_at).toLocaleString()}
                         </p>
                       </div>
-                      <div className="flex items-center">
-                        {submission.is_viewed && (
-                          <CheckCircle className="h-5 w-5 text-teal-400" aria-label="Submission viewed" />
-                        )}
-                      </div>
+                      {sub.is_viewed && (
+                        <CheckCircle className="w-5 h-5 text-teal-400" />
+                      )}
                     </div>
                   ))
                 )}

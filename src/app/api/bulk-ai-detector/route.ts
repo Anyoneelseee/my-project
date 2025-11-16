@@ -1,99 +1,54 @@
 // src/app/api/bulk-ai-detector/route.ts
 import { NextResponse } from "next/server";
-import { getCachedAI, setCachedAI } from "@/utils/cache";
 
-const AI_DETECTOR_URL = process.env.NEXT_PUBLIC_AI_DETECTOR_URL;
+const BULK_AI_URL = "http://localhost:8000/api/bulk-ai-detector";
 
 export async function POST(request: Request) {
-  if (!AI_DETECTOR_URL) {
-    return NextResponse.json(
-      { error: "AI detector URL is not configured" },
-      { status: 500 }
-    );
-  }
-
   try {
     const { codes } = await request.json();
     if (!Array.isArray(codes) || codes.length === 0 || codes.length > 10) {
       return NextResponse.json(
-        { error: "Invalid input: Provide 1-10 code snippets" },
+        { error: "Provide 1-10 code snippets" },
         { status: 400 }
       );
     }
 
     const results = await Promise.all(
-  codes.map(async (code: string, index: number) => {
-    const fileNum = index + 1;
+      codes.map(async (code: string, index: number) => {
+        const fileNum = index + 1;
+        console.log(`AI check for file ${fileNum} (no cache)`);
 
-    // 1. Try cache first
-    const cached = await getCachedAI<{ ai_percentage: number }>(code);
-    if (cached) {
-      console.log(`Cache HIT for file ${fileNum}`);
-      return {
-        ai_percentage: cached.ai_percentage,
-        error: null,
-        cached: true,
-      };
-    }
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 28000); // 28s
 
-    console.log(`Cache MISS for file ${fileNum}`);
+        const response = await fetch(BULK_AI_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ code }]), // ← List[CodeInput]
+          signal: controller.signal,
+        });
 
-    // 2. Call AI detector
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 28000); // 28s safety
+        clearTimeout(timeoutId);
 
-      const response = await fetch(AI_DETECTOR_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-        signal: controller.signal,
-      });
+        if (!response.ok) {
+          const txt = await response.text();
+          throw new Error(`HTTP ${response.status}: ${txt}`);
+        }
 
-      clearTimeout(timeoutId);
+        const data = await response.json();
+        const ai_percentage = Number(data[0]?.ai_percentage ?? 0);
 
-      if (!response.ok) {
-        const txt = await response.text();
-        throw new Error(`HTTP ${response.status}: ${txt}`);
-      }
+        if (isNaN(ai_percentage)) {
+          throw new Error("Invalid ai_percentage from detector");
+        }
 
-      const data = await response.json();
-      const ai_percentage = Number(data.ai_percentage ?? 0);
-
-      if (isNaN(ai_percentage)) {
-        throw new Error("Invalid ai_percentage from detector");
-      }
-
-      // 3. Cache result
-      await setCachedAI(code, { ai_percentage });
-
-      return {
-        ai_percentage,
-        error: null,
-        cached: false,
-      };
-    } catch (err: unknown) {
-  const isTimeout =
-    err instanceof Error && err.name === "AbortError";
-
-  const msg =
-    isTimeout
-      ? "AI detector timed out"
-      : err instanceof Error
-      ? err.message
-      : "Unknown error";
-
-  console.warn(`AI detection failed for file ${fileNum}:`, msg);
-
-  return {
-    ai_percentage: null,
-    error: `AI check failed: ${msg}`,
-    cached: false,
-  };
-}
-
-  })
-);
+        return {
+          ai_percentage,
+          error: null,
+          cached: false, // ← always false
+        };
+      })
+    );
 
     return NextResponse.json(results);
   } catch (error) {
@@ -105,5 +60,4 @@ export async function POST(request: Request) {
   }
 }
 
-// This line is optional but RECOMMENDED
-export const maxDuration = 30; // 30 seconds
+export const maxDuration = 30;
