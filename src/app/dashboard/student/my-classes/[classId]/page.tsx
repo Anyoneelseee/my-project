@@ -385,6 +385,9 @@ export default function JoinedClassPage() {
         className="h-screen w-screen fixed inset-0 z-50"
       >
         <CodeEditorSection
+          classId={classId}
+          activityId={selectedActivityId}
+          section={classData.section}
           onSubmitSuccess={handleSubmitSuccess}
         />
       </motion.div>
