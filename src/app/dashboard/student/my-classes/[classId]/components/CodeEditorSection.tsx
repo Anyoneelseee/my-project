@@ -138,6 +138,51 @@ export default function CodeEditorOnly({
   const [renameValue, setRenameValue] = useState("");
   const pollInterval = useRef<NodeJS.Timeout | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const [activities, setActivities] = useState<Array<{ id: string; action: string; timestamp: string }>>([]);
+  const typingDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingLogRef = useRef<number>(0);
+  const [activeTab, setActiveTab] = useState<"console" | "activity">("console");
+
+  /* ------------------------------------------------------------------ */
+  /*                       ACTIVITY LOGGING                             */
+  /* ------------------------------------------------------------------ */
+  const logActivity = async (action: string) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const now = new Date();
+      const newActivity = {
+        id: `${Date.now()}-${Math.random()}`,
+        action,
+        timestamp: now.toLocaleTimeString(),
+      };
+      setActivities((prev) => [newActivity, ...prev].slice(0, 10));
+
+      await supabase.from("activity_logs").insert({
+        class_id: classId,
+        student_id: session.user.id,
+        activity_id: activityId,
+        action,
+        timestamp: now.toISOString(),
+      });
+    } catch (error) {
+      console.error("Failed to log activity:", error);
+    }
+  };
+
+  const debounceTypingLog = () => {
+    const now = Date.now();
+    if (now - lastTypingLogRef.current < 5000) return;
+
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+    typingDebounceRef.current = setTimeout(() => {
+      logActivity("Started Typing");
+      lastTypingLogRef.current = Date.now();
+    }, 500);
+  };
 
   /* ------------------------------------------------------------------ */
   /*                           INITIAL LOAD                             */
@@ -241,6 +286,8 @@ export default function CodeEditorOnly({
     setIsRunning(true);
     setSessionId(null);
 
+    logActivity("Run Code");
+
     try {
       const res = await fetch(`${REPLIT_URL}/run`, {
         method: "POST",
@@ -303,6 +350,7 @@ export default function CodeEditorOnly({
     a.click();
     URL.revokeObjectURL(url);
     setOutput((p) => p + `\n[Saved] ${currentFile.name}\n`);
+    logActivity("Saved Code");
   };
 
   /* ------------------------------------------------------------------ */
@@ -345,6 +393,7 @@ export default function CodeEditorOnly({
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? "Submission failed");
 
+      logActivity("Submitted Code");
       setOutput((p) => p + "\nSubmitted successfully!\n");
       setShowSuccess(true);
       onSubmitSuccess?.();
@@ -427,6 +476,7 @@ export default function CodeEditorOnly({
       ...prev,
       [activeFile]: { ...prev[activeFile], code: newCode },
     }));
+    debounceTypingLog();
   };
 
   /* ------------------------------------------------------------------ */
@@ -602,63 +652,111 @@ const handleExit = () => {
 
           {/* ---------- CONSOLE PANEL ---------- */}
           <div className="lg:w-96 flex flex-col bg-gradient-to-b from-gray-900/60 to-black/40 backdrop-blur-3xl border-l border-white/10">
-            <div className="p-5 bg-black/40 backdrop-blur-3xl border-b border-white/10">
-              <h3 className="font-bold text-emerald-400 text-sm tracking-widest">
-                CONSOLE OUTPUT
-              </h3>
+            <div className="p-5 bg-black/40 backdrop-blur-3xl border-b border-white/10 flex items-center gap-3">
+              <div className="flex gap-2 text-xs flex-1">
+                <button 
+                  onClick={() => setActiveTab("console")}
+                  className={`px-2 py-1 rounded transition-all ${
+                    activeTab === "console" 
+                      ? "text-emerald-400 bg-emerald-500/20 border border-emerald-500/50" 
+                      : "text-gray-400 hover:text-gray-300"
+                  }`}
+                >
+                  Console
+                </button>
+                <button 
+                  onClick={() => setActiveTab("activity")}
+                  className={`px-2 py-1 rounded transition-all ${
+                    activeTab === "activity" 
+                      ? "text-emerald-400 bg-emerald-500/20 border border-emerald-500/50" 
+                      : "text-gray-400 hover:text-gray-300"
+                  }`}
+                >
+                  Activity ({activities.length})
+                </button>
+              </div>
             </div>
 
-            <div
-              ref={consoleRef}
-              className="flex-1 p-5 bg-black/30 overflow-y-auto font-mono text-sm text-green-300 whitespace-pre-wrap"
-            >
-              {output === "" && !isRunning && (
-                <span className="text-gray-500 italic">
-                  Run your code to see output…
-                </span>
-              )}
-              <span>{output}</span>
+            {activeTab === "console" ? (
+              <>
+                <div
+                  ref={consoleRef}
+                  className="flex-1 p-5 bg-black/30 overflow-y-auto font-mono text-sm text-green-300 whitespace-pre-wrap"
+                >
+                  {output === "" && !isRunning && (
+                    <span className="text-gray-500 italic">
+                      Run your code to see output…
+                    </span>
+                  )}
+                  <span>{output}</span>
 
-              {currentLang !== "python" &&
-                pendingInputs.map((inp, i) => (
-                  <div key={i} className="text-cyan-400">
-                    &gt; {inp}
-                  </div>
-                ))}
+                  {currentLang !== "python" &&
+                    pendingInputs.map((inp, i) => (
+                      <div key={i} className="text-cyan-400">
+                        &gt; {inp}
+                      </div>
+                    ))}
 
-              {isRunning && !isWaitingForInput && (
-                <div className="text-yellow-400 animate-pulse font-medium">
-                  Running…
+                  {isRunning && !isWaitingForInput && (
+                    <div className="text-yellow-400 animate-pulse font-medium">
+                      Running…
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {isWaitingForInput && (
-              <div className="p-5 bg-black/40 backdrop-blur-3xl border-t border-white/10 flex gap-3">
-                <input
-                  type="text"
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && userInput.trim()) {
-                      e.preventDefault();
-                      handleInputSubmit();
-                    }
-                  }}
-                  placeholder="Enter input…"
-                  className="flex-1 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 transition-all duration-300"
-                  autoFocus
-                />
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button
-                    onClick={handleInputSubmit}
-                    disabled={!userInput.trim()}
-                    size="sm"
-                    className="h-12 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-2xl shadow-lg"
-                  >
-                    Send
-                  </Button>
-                </motion.div>
+                {isWaitingForInput && (
+                  <div className="p-5 bg-black/40 backdrop-blur-3xl border-t border-white/10 flex gap-3">
+                    <input
+                      type="text"
+                      value={userInput}
+                      onChange={(e) => setUserInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && userInput.trim()) {
+                          e.preventDefault();
+                          handleInputSubmit();
+                        }
+                      }}
+                      placeholder="Enter input…"
+                      className="flex-1 px-5 py-3 bg-white/5 border border-white/10 rounded-2xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/70 transition-all duration-300"
+                      autoFocus
+                    />
+                    <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                      <Button
+                        onClick={handleInputSubmit}
+                        disabled={!userInput.trim()}
+                        size="sm"
+                        className="h-12 px-6 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium rounded-2xl shadow-lg"
+                      >
+                        Send
+                      </Button>
+                    </motion.div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex-1 p-5 bg-black/30 overflow-y-auto space-y-2">
+                {activities.length === 0 ? (
+                  <span className="text-gray-500 italic">No activities yet…</span>
+                ) : (
+                  activities.map((activity) => (
+                    <motion.div
+                      key={activity.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex items-start gap-3 p-3 rounded-lg bg-emerald-900/20 border border-emerald-500/30 hover:bg-emerald-900/30 transition-colors"
+                    >
+                      <div className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-emerald-300 text-sm font-medium truncate">
+                          {activity.action}
+                        </p>
+                        <p className="text-gray-400 text-xs">
+                          {activity.timestamp}
+                        </p>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
               </div>
             )}
           </div>
